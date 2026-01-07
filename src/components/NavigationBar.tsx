@@ -69,6 +69,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
     <div style={{
       display: 'flex',
       alignItems: 'center',
+      justifyContent: 'space-between',
       gap: '12px',
       padding: '8px 16px',
       backgroundColor,
@@ -78,53 +79,10 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       flexShrink: 0,
       margin: 0,
     }}>
-      {/* AI Chat Button - show when LM Studio is available or when callback is provided */}
-      {onAIChatClick && (
-        <div style={{ display: 'flex', gap: '8px', borderLeft: `1px solid ${borderColor}`, paddingLeft: '12px' }}>
-          <button
-            onClick={onAIChatClick}
-            title={
-              !isAIAvailable ? "AI Diff Analysis (LM Studio - checking availability...)" :
-              aiStatus === 'thinking' ? "AI is analyzing the diff..." :
-              aiStatus === 'ready' ? "AI Diff Analysis (Ready)" :
-              "AI Diff Analysis (LM Studio)"
-            }
-            style={{
-              ...buttonStyle,
-              backgroundColor: 
-                !isAIAvailable ? '#888888' :
-                aiStatus === 'thinking' ? '#ff9800' :
-                aiStatus === 'ready' ? '#4caf50' :
-                '#4caf50',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              opacity: isAIAvailable ? 1 : 0.7,
-            }}
-          >
-            {aiStatus === 'thinking' ? (
-              <>
-                <span style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>🤔</span>
-                <span>AI Thinking...</span>
-              </>
-            ) : aiStatus === 'ready' ? (
-              <>
-                <span>✨</span>
-                <span>AI Ready</span>
-              </>
-            ) : (
-              <>
-                <span>🤖</span>
-                <span>AI</span>
-                {!isAIAvailable && <span style={{ fontSize: '10px', marginLeft: '4px' }}>?</span>}
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Navigation controls */}
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      {/* Left side: Navigation controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Navigation controls */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button
           onClick={onPrevious}
           disabled={totalDiffs === 0}
@@ -146,9 +104,9 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
         >
           Next ↓
         </button>
-      </div>
+        </div>
 
-      {/* Font controls */}
+        {/* Font controls */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', borderLeft: `1px solid ${borderColor}`, paddingLeft: '12px' }}>
         <label style={{ fontSize: '11px', color: labelColor }}>Font:</label>
         <select
@@ -184,6 +142,49 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
           ))}
         </select>
       </div>
+      </div>
+
+      {/* Right side: AI Chat Button */}
+      {onAIChatClick && (
+        <button
+          onClick={onAIChatClick}
+          title={
+            !isAIAvailable ? "AI Diff Analysis (LM Studio - checking availability...)" :
+            aiStatus === 'thinking' ? "AI is analyzing the diff..." :
+            aiStatus === 'ready' ? "AI Diff Analysis (Ready)" :
+            "AI Diff Analysis (LM Studio)"
+          }
+          style={{
+            ...buttonStyle,
+            backgroundColor: isDarkMode ? '#2d2d2d' : '#ffffff',
+            color: textColor,
+            border: `1px solid ${borderColor}`,
+            opacity: isAIAvailable ? 1 : 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '16px',
+            padding: '4px 8px',
+          }}
+        >
+          {aiStatus === 'thinking' ? (
+            <>
+              <span style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>🤖</span>
+              <span style={{ fontSize: '10px', opacity: 0.7 }}>⏱</span>
+            </>
+          ) : aiStatus === 'ready' ? (
+            <>
+              <span>🤖</span>
+              <span style={{ fontSize: '12px' }}>✓</span>
+            </>
+          ) : (
+            <>
+              <span>🤖</span>
+              {!isAIAvailable && <span style={{ fontSize: '12px', color: '#ff4444' }}>✗</span>}
+            </>
+          )}
+        </button>
+      )}
     </div>
   );
 };

@@ -9,8 +9,7 @@ A fast, modern visual diff tool built with Tauri, React, and Monaco Editor. Comp
 - **Side-by-side diff view** with Monaco Editor (same editor as VS Code)
 - **Syntax highlighting** for 30+ programming languages
 - **Navigate between changes** with Previous/Next buttons
-- **Copy changes** from left to right or right to left
-- **Save files** directly from the editor
+- **AI-powered diff analysis** - Get intelligent summaries of your changes using LM Studio
 - **Keyboard shortcuts** for efficient workflow
 - **Command-line driven** - easy to integrate with git or other tools
 - **Lightweight** - Small bundle size (~5-10 MB) thanks to Tauri
@@ -18,6 +17,16 @@ A fast, modern visual diff tool built with Tauri, React, and Monaco Editor. Comp
 ## Prerequisites
 
 This guide assumes you have **Homebrew** installed. If you don't have Homebrew, install it from [brew.sh](https://brew.sh).
+
+### AI Features (Optional)
+
+To use the AI diff analysis feature, you'll need:
+
+- **LM Studio** installed and running ([lmstudio.ai](https://lmstudio.ai))
+- LM Studio server enabled on port **1234** (default)
+- A model loaded in LM Studio
+
+The AI feature will automatically detect when LM Studio is available and show a status indicator in the navigation bar. When ready, click the AI button to get intelligent summaries of your code changes.
 
 ## Installation
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import ReactMarkdown from 'react-markdown';
+import { generateDiff } from '../utils/diff';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -43,7 +44,7 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
   // Sync with initialMessages prop and store/update initial prompt with full file contents
   useEffect(() => {
     // Always update the initial prompt ref with current file contents (for API context)
-    const fullPrompt = `I'm analyzing a git diff showing changes to a file. Please summarize the new changes being made.
+    const fullPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
 
 **Before (${leftFileName}):**
 \`\`\`
@@ -55,30 +56,29 @@ ${leftContent}
 ${rightContent}
 \`\`\`
 
-Please analyze this diff and summarize the changes using the following markdown template:
+Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
 
 ## Summary
 
-Brief overview of what changed and why.
+Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
 
 ## Changes
 
 ### Additions
-- List any new code, functions, or features added
+- New functionality, classes, functions, or features added
 
-### Deletions
-- List any code, functions, or features removed
+### Deletions  
+- Functionality, classes, functions, or features removed
 
 ### Modifications
-- List any existing code that was changed
+- Existing code that was changed or refactored
 
-## Patterns & Notable Differences
+## Details
 
-- Any patterns or notable differences observed
+- Specific new classes, functions, or patterns introduced
+- Notable implementation details or patterns
 
----
-
-Focus on summarizing the new changes being made. Format your response exactly like this template, using proper markdown syntax.`;
+Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
     initialPromptRef.current = fullPrompt;
     
     // Sync messages from prop
@@ -163,8 +163,13 @@ Focus on summarizing the new changes being made. Format your response exactly li
       });
     });
     
-    invoke<string>('send_lm_studio_message', { messages: apiMessages })
-      .then((response) => {
+    // Retry logic with fallback to diff format
+    let attempt = 0;
+    const maxAttempts = 3;
+    
+    const trySendMessage = async (messagesToSend: Array<{role: string, content: string}>) => {
+      try {
+        const response = await invoke<string>('send_lm_studio_message', { messages: messagesToSend });
         setMessages(prevMsgs => {
           // Check if we already have this assistant message to prevent duplicates
           const lastMsg = prevMsgs[prevMsgs.length - 1];
@@ -177,31 +182,148 @@ Focus on summarizing the new changes being made. Format your response exactly li
           };
           return [...prevMsgs, assistantMessage];
         });
-      })
-      .catch((error) => {
-        setMessages(prevMsgs => {
-          const errorContent = `Error: ${error instanceof Error ? error.message : String(error)}`;
-          // Check if we already have this error message
-          const lastMsg = prevMsgs[prevMsgs.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === errorContent) {
-            return prevMsgs;
-          }
-          const errorMessage: Message = {
-            role: 'assistant',
-            content: errorContent,
-          };
-          return [...prevMsgs, errorMessage];
-        });
-      })
-      .finally(() => {
-        setIsLoading(false);
-        if (onStatusChange) {
-          onStatusChange('ready');
+        return true; // Success
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isContextError = errorMessage.includes('context length') || 
+                               errorMessage.includes('number of tokens') ||
+                               (errorMessage.includes('400') && errorMessage.includes('Bad Request'));
+        
+        if (isContextError && attempt < maxAttempts - 1) {
+          attempt++;
+          return false; // Retry needed
+        } else {
+          // Final attempt failed or non-context error
+          setMessages(prevMsgs => {
+            const errorContent = `Error: ${errorMessage}${attempt > 0 ? ` (tried ${attempt + 1} attempts with different formats)` : ''}`;
+            // Check if we already have this error message
+            const lastMsg = prevMsgs[prevMsgs.length - 1];
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === errorContent) {
+              return prevMsgs;
+            }
+            const errorMsg: Message = {
+              role: 'assistant',
+              content: errorContent,
+            };
+            return [...prevMsgs, errorMsg];
+          });
+          return true; // Done (with error)
         }
+      }
+    };
+    
+    // Try with current messages
+    let success = await trySendMessage(apiMessages);
+    
+    // If failed due to context, retry with diff format
+    if (!success && attempt === 1) {
+      const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
+      const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
+
+**Diff:**
+\`\`\`
+${diffText}
+\`\`\`
+
+Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
+
+## Summary
+
+Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
+
+## Changes
+
+### Additions
+- New functionality, classes, functions, or features added
+
+### Deletions  
+- Functionality, classes, functions, or features removed
+
+### Modifications
+- Existing code that was changed or refactored
+
+## Details
+
+- Specific new classes, functions, or patterns introduced
+- Notable implementation details or patterns
+
+Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
+      
+      const retryApiMessages: Array<{role: string, content: string}> = [{
+        role: 'user',
+        content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${diffPrompt}`,
+      }];
+      
+      // Add subsequent conversation messages
+      messagesToInclude.forEach(msg => {
+        retryApiMessages.push({
+          role: msg.role,
+          content: msg.content,
+        });
       });
+      
+      success = await trySendMessage(retryApiMessages);
+    }
+    
+    // If still failed, try with condensed diff (only changed lines)
+    if (!success && attempt === 2) {
+      const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
+      const diffLines = diffText.split('\n').filter(line => line.startsWith('+') || line.startsWith('-'));
+      const condensedDiff = diffLines.join('\n');
+      const condensedPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
+
+**Diff (changed lines only):**
+\`\`\`
+${condensedDiff}
+\`\`\`
+
+Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
+
+## Summary
+
+Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
+
+## Changes
+
+### Additions
+- New functionality, classes, functions, or features added
+
+### Deletions  
+- Functionality, classes, functions, or features removed
+
+### Modifications
+- Existing code that was changed or refactored
+
+## Details
+
+- Specific new classes, functions, or patterns introduced
+- Notable implementation details or patterns
+
+Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
+      
+      const finalApiMessages: Array<{role: string, content: string}> = [{
+        role: 'user',
+        content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${condensedPrompt}`,
+      }];
+      
+      // Add subsequent conversation messages
+      messagesToInclude.forEach(msg => {
+        finalApiMessages.push({
+          role: msg.role,
+          content: msg.content,
+        });
+      });
+      
+      await trySendMessage(finalApiMessages);
+    }
+    
+    setIsLoading(false);
+    if (onStatusChange) {
+      onStatusChange('ready');
+    }
     
     setInput('');
-  }, [isLoading]);
+  }, [isLoading, leftContent, rightContent, leftFileName, rightFileName]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,12 +332,12 @@ Focus on summarizing the new changes being made. Format your response exactly li
 
   if (!isOpen) return null;
 
-  const bgColor = isDarkMode ? '#1e1e1e' : '#ffffff';
-  const borderColor = isDarkMode ? '#3e3e42' : '#e1e1e1';
-  const textColor = isDarkMode ? '#cccccc' : '#333333';
-  const inputBg = isDarkMode ? '#2d2d2d' : '#f5f5f5';
+  const bgColor = isDarkMode ? '#1a1f2e' : '#f0f4f8';
+  const borderColor = isDarkMode ? '#2d3441' : '#c8d1db';
+  const textColor = isDarkMode ? '#cbd5e1' : '#1e293b';
+  const inputBg = isDarkMode ? '#252b3a' : '#ffffff';
   const userMsgBg = isDarkMode ? '#0e639c' : '#e3f2fd';
-  const assistantMsgBg = isDarkMode ? '#2d2d2d' : '#f5f5f5';
+  const assistantMsgBg = isDarkMode ? '#252b3a' : '#e8f0f6';
 
   return (
     <div
@@ -259,7 +381,7 @@ Focus on summarizing the new changes being made. Format your response exactly li
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '20px' }}>🤖</span>
-            <h3 style={{ margin: 0, color: textColor }}>AI Diff Analysis</h3>
+            <h3 style={{ margin: 0, color: isDarkMode ? '#7fa8d4' : '#1e40af', fontWeight: 500 }}>AI Diff Analysis</h3>
             {!isAIAvailable && (
               <span style={{ fontSize: '12px', color: '#ff6b6b' }}>
                 (LM Studio not available)
@@ -286,10 +408,10 @@ Focus on summarizing the new changes being made. Format your response exactly li
           style={{
             flex: 1,
             overflowY: 'auto',
-            padding: '16px',
+            padding: '12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '8px',
           }}
         >
           {messages.length === 0 && isAIAvailable && (
@@ -314,8 +436,8 @@ Focus on summarizing the new changes being made. Format your response exactly li
                 style={{
                   alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
                   maxWidth: '80%',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
                   backgroundColor: msg.role === 'user' ? userMsgBg : assistantMsgBg,
                   color: textColor,
                   wordBreak: 'break-word',
@@ -324,33 +446,33 @@ Focus on summarizing the new changes being made. Format your response exactly li
                 {msg.role === 'assistant' ? (
                   <div style={{
                     fontSize: '14px',
-                    lineHeight: '1.6',
+                    lineHeight: '1.4',
                   }}>
                     <ReactMarkdown
                       components={{
-                        h1: ({node, ...props}) => <h1 style={{ fontSize: '20px', marginTop: '12px', marginBottom: '8px', fontWeight: 'bold' }} {...props} />,
-                        h2: ({node, ...props}) => <h2 style={{ fontSize: '18px', marginTop: '10px', marginBottom: '6px', fontWeight: 'bold' }} {...props} />,
-                        h3: ({node, ...props}) => <h3 style={{ fontSize: '16px', marginTop: '8px', marginBottom: '4px', fontWeight: 'bold' }} {...props} />,
-                        p: ({node, ...props}) => <p style={{ margin: '8px 0' }} {...props} />,
-                        ul: ({node, ...props}) => <ul style={{ margin: '8px 0', paddingLeft: '20px' }} {...props} />,
-                        ol: ({node, ...props}) => <ol style={{ margin: '8px 0', paddingLeft: '20px' }} {...props} />,
-                        li: ({node, ...props}) => <li style={{ margin: '4px 0' }} {...props} />,
+                        h1: ({node, ...props}) => <h1 style={{ fontSize: '18px', marginTop: '8px', marginBottom: '4px', fontWeight: 'bold' }} {...props} />,
+                        h2: ({node, ...props}) => <h2 style={{ fontSize: '16px', marginTop: '6px', marginBottom: '3px', fontWeight: 'bold' }} {...props} />,
+                        h3: ({node, ...props}) => <h3 style={{ fontSize: '15px', marginTop: '5px', marginBottom: '2px', fontWeight: 'bold' }} {...props} />,
+                        p: ({node, ...props}) => <p style={{ margin: '4px 0', lineHeight: '1.4' }} {...props} />,
+                        ul: ({node, ...props}) => <ul style={{ margin: '4px 0', paddingLeft: '18px' }} {...props} />,
+                        ol: ({node, ...props}) => <ol style={{ margin: '4px 0', paddingLeft: '18px' }} {...props} />,
+                        li: ({node, ...props}) => <li style={{ margin: '2px 0', lineHeight: '1.4' }} {...props} />,
                         code: ({node, inline, ...props}: any) => 
                           inline ? (
-                            <code style={{ backgroundColor: isDarkMode ? '#3e3e42' : '#e8e8e8', padding: '2px 6px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '13px' }} {...props} />
+                            <code style={{ backgroundColor: isDarkMode ? '#3e3e42' : '#e8e8e8', padding: '1px 4px', borderRadius: '3px', fontFamily: 'monospace', fontSize: '12px' }} {...props} />
                           ) : (
-                            <code style={{ display: 'block', backgroundColor: isDarkMode ? '#2d2d2d' : '#f5f5f5', padding: '12px', borderRadius: '6px', fontFamily: 'monospace', fontSize: '13px', overflow: 'auto' }} {...props} />
+                            <code style={{ display: 'block', backgroundColor: isDarkMode ? '#2d2d2d' : '#f5f5f5', padding: '8px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '12px', overflow: 'auto', margin: '4px 0' }} {...props} />
                           ),
-                        pre: ({node, ...props}) => <pre style={{ margin: '8px 0', overflow: 'auto' }} {...props} />,
-                        blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: `4px solid ${isDarkMode ? '#555' : '#ccc'}`, paddingLeft: '12px', margin: '8px 0', fontStyle: 'italic' }} {...props} />,
-                        hr: ({node, ...props}) => <hr style={{ border: 'none', borderTop: `1px solid ${isDarkMode ? '#444' : '#ddd'}`, margin: '16px 0' }} {...props} />,
+                        pre: ({node, ...props}) => <pre style={{ margin: '4px 0', overflow: 'auto' }} {...props} />,
+                        blockquote: ({node, ...props}) => <blockquote style={{ borderLeft: `3px solid ${isDarkMode ? '#555' : '#ccc'}`, paddingLeft: '10px', margin: '4px 0', fontStyle: 'italic' }} {...props} />,
+                        hr: ({node, ...props}) => <hr style={{ border: 'none', borderTop: `1px solid ${isDarkMode ? '#444' : '#ddd'}`, margin: '8px 0' }} {...props} />,
                       }}
                     >
                       {msg.content}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                  <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>{msg.content}</div>
                 )}
               </div>
             );

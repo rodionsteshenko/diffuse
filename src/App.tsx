@@ -7,6 +7,7 @@ import { NavigationBar } from './components/NavigationBar';
 import { AIChatModal } from './components/AIChatModal';
 import { useDiffNavigation } from './hooks/useDiffNavigation';
 import { FileInfo } from './types';
+import { generateDiff } from './utils/diff';
 import './App.css';
 
 function App() {
@@ -96,7 +97,7 @@ function App() {
       const rightFileName = rightFile?.path || 'Right File';
 
       // Generate the full prompt with complete file contents
-      const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please summarize the new changes being made.
+      const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
 
 **Before (${leftFileName}):**
 \`\`\`
@@ -108,52 +109,148 @@ ${leftContent}
 ${rightContent}
 \`\`\`
 
-Please analyze this diff and summarize the changes using the following markdown template:
+Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
 
 ## Summary
 
-Brief overview of what changed and why.
+Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
 
 ## Changes
 
 ### Additions
-- List any new code, functions, or features added
+- New functionality, classes, functions, or features added
 
-### Deletions
-- List any code, functions, or features removed
+### Deletions  
+- Functionality, classes, functions, or features removed
 
 ### Modifications
-- List any existing code that was changed
+- Existing code that was changed or refactored
 
-## Patterns & Notable Differences
+## Details
 
-- Any patterns or notable differences observed
+- Specific new classes, functions, or patterns introduced
+- Notable implementation details or patterns
 
----
-
-Focus on summarizing the new changes being made. Format your response exactly like this template, using proper markdown syntax.`;
+Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
 
       setAiStatus('thinking');
       const userMessage = { role: 'user' as const, content: diffPrompt };
       setAiMessages([userMessage]);
 
-      try {
-        const apiMessages = [{
-          role: 'user',
-          content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${diffPrompt}`,
-        }];
+      // Try with full files first, then fallback to diff if context is too large
+      let attempt = 0;
+      const maxAttempts = 3;
+      let lastError: Error | null = null;
 
-        const response = await invoke<string>('send_lm_studio_message', { messages: apiMessages });
-        const assistantMessage = { role: 'assistant' as const, content: response || 'No response received' };
-        setAiMessages([userMessage, assistantMessage]);
-        setAiStatus('ready');
-      } catch (error) {
-        const errorMessage = { 
-          role: 'assistant' as const, 
-          content: `Error: ${error instanceof Error ? error.message : String(error)}` 
-        };
-        setAiMessages([userMessage, errorMessage]);
-        setAiStatus('ready');
+      while (attempt < maxAttempts) {
+        try {
+          let promptToSend = diffPrompt;
+          
+          if (attempt === 1) {
+            // Second attempt: Use diff format instead of full files
+            const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
+            promptToSend = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
+
+**Diff:**
+\`\`\`
+${diffText}
+\`\`\`
+
+Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
+
+## Summary
+
+Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
+
+## Changes
+
+### Additions
+- New functionality, classes, functions, or features added
+
+### Deletions  
+- Functionality, classes, functions, or features removed
+
+### Modifications
+- Existing code that was changed or refactored
+
+## Details
+
+- Specific new classes, functions, or patterns introduced
+- Notable implementation details or patterns
+
+Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
+          } else if (attempt === 2) {
+            // Third attempt: Use a more condensed diff (only show changed sections)
+            const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
+            // Filter to only show lines with changes
+            const diffLines = diffText.split('\n').filter(line => line.startsWith('+') || line.startsWith('-'));
+            const condensedDiff = diffLines.join('\n');
+            promptToSend = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
+
+**Diff (changed lines only):**
+\`\`\`
+${condensedDiff}
+\`\`\`
+
+Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
+
+## Summary
+
+Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
+
+## Changes
+
+### Additions
+- New functionality, classes, functions, or features added
+
+### Deletions  
+- Functionality, classes, functions, or features removed
+
+### Modifications
+- Existing code that was changed or refactored
+
+## Details
+
+- Specific new classes, functions, or patterns introduced
+- Notable implementation details or patterns
+
+Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
+          }
+
+          const apiMessages = [{
+            role: 'user',
+            content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${promptToSend}`,
+          }];
+
+          const response = await invoke<string>('send_lm_studio_message', { messages: apiMessages });
+          const assistantMessage = { role: 'assistant' as const, content: response || 'No response received' };
+          setAiMessages([userMessage, assistantMessage]);
+          setAiStatus('ready');
+          return; // Success, exit retry loop
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          const errorMessage = lastError.message || String(error);
+          
+          // Check if it's a context length error
+          const isContextError = errorMessage.includes('context length') || 
+                                 errorMessage.includes('number of tokens') ||
+                                 (errorMessage.includes('400') && errorMessage.includes('Bad Request'));
+          
+          if (isContextError && attempt < maxAttempts - 1) {
+            // Try again with diff format
+            attempt++;
+            continue;
+          } else {
+            // Final attempt failed or non-context error
+            const errorMsg = { 
+              role: 'assistant' as const, 
+              content: `Error: ${errorMessage}${attempt > 0 ? ` (tried ${attempt + 1} attempts with different formats)` : ''}` 
+            };
+            setAiMessages([userMessage, errorMsg]);
+            setAiStatus('ready');
+            return;
+          }
+        }
       }
     };
 

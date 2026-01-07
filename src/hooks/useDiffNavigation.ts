@@ -14,7 +14,11 @@ export const useDiffNavigation = () => {
       const changes = editor.getLineChanges() || [];
       console.log('Diff changes detected:', changes.length);
       setDiffChanges(changes);
+      // Only adjust index if it's out of bounds, but keep it as close as possible
+      // instead of jumping to 0
       if (changes.length > 0 && currentDiffIndex >= changes.length) {
+        setCurrentDiffIndex(changes.length - 1);
+      } else if (changes.length === 0) {
         setCurrentDiffIndex(0);
       }
     }, 100);

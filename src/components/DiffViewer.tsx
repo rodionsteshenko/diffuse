@@ -13,6 +13,7 @@ interface DiffViewerProps {
   onContentChange?: (modifiedContent: string) => void;
   onLeftContentChange?: (originalContent: string) => void;
   onDiffClick?: (lineNumber: number) => void;
+  onEditorFocus?: (side: 'original' | 'modified') => void;
 }
 
 const getLanguageFromPath = (path: string): string => {
@@ -59,6 +60,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   onContentChange,
   onLeftContentChange,
   onDiffClick,
+  onEditorFocus,
 }) => {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const language = getLanguageFromPath(rightPath);
@@ -101,14 +103,25 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       onLeftContentChange?.(newContent);
     });
 
-    // Listen for clicks to detect which diff was clicked
+    // Track which editor is focused/clicked for undo/redo
+    originalEditor.onDidFocusEditorWidget(() => {
+      onEditorFocus?.('original');
+    });
+
+    modifiedEditor.onDidFocusEditorWidget(() => {
+      onEditorFocus?.('modified');
+    });
+
+    // Listen for clicks to detect which diff was clicked AND which editor was clicked
     modifiedEditor.onMouseDown((e) => {
+      onEditorFocus?.('modified');
       if (e.target.position) {
         onDiffClick?.(e.target.position.lineNumber);
       }
     });
 
     originalEditor.onMouseDown((e) => {
+      onEditorFocus?.('original');
       if (e.target.position) {
         onDiffClick?.(e.target.position.lineNumber);
       }

@@ -36,6 +36,7 @@ function App() {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const leftFileRef = useRef<FileInfo | null>(null);
   const rightFileRef = useRef<FileInfo | null>(null);
+  const lastFocusedEditorRef = useRef<'original' | 'modified'>('modified');
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -151,6 +152,11 @@ function App() {
     return () => {
       unlisten.then(fn => fn());
     };
+  }, []);
+
+  // Track which editor was last focused for undo/redo
+  const handleEditorFocus = useCallback((side: 'original' | 'modified') => {
+    lastFocusedEditorRef.current = side;
   }, []);
 
   // Update diff changes when editor mounts or content changes
@@ -360,22 +366,17 @@ function App() {
   const handleUndo = useCallback(() => {
     if (!editorRef.current) return;
 
-    // Try to undo in whichever editor has focus
     const originalEditor = editorRef.current.getOriginalEditor();
     const modifiedEditor = editorRef.current.getModifiedEditor();
 
-    if (modifiedEditor.hasTextFocus()) {
-      const model = modifiedEditor.getModel();
-      if (model) {
-        model.undo();
-      }
-    } else if (originalEditor.hasTextFocus()) {
+    // Use the last focused editor (tracked via focus events)
+    if (lastFocusedEditorRef.current === 'original') {
       const model = originalEditor.getModel();
       if (model) {
+        originalEditor.focus();
         model.undo();
       }
     } else {
-      // Default to modified editor if no focus
       const model = modifiedEditor.getModel();
       if (model) {
         modifiedEditor.focus();
@@ -387,22 +388,17 @@ function App() {
   const handleRedo = useCallback(() => {
     if (!editorRef.current) return;
 
-    // Try to redo in whichever editor has focus
     const originalEditor = editorRef.current.getOriginalEditor();
     const modifiedEditor = editorRef.current.getModifiedEditor();
 
-    if (modifiedEditor.hasTextFocus()) {
-      const model = modifiedEditor.getModel();
-      if (model) {
-        model.redo();
-      }
-    } else if (originalEditor.hasTextFocus()) {
+    // Use the last focused editor (tracked via focus events)
+    if (lastFocusedEditorRef.current === 'original') {
       const model = originalEditor.getModel();
       if (model) {
+        originalEditor.focus();
         model.redo();
       }
     } else {
-      // Default to modified editor if no focus
       const model = modifiedEditor.getModel();
       if (model) {
         modifiedEditor.focus();
@@ -552,6 +548,7 @@ function App() {
         onContentChange={setRightContent}
         onLeftContentChange={setLeftContent}
         onDiffClick={handleDiffClick}
+        onEditorFocus={handleEditorFocus}
       />
     </div>
   );

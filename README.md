@@ -17,30 +17,73 @@ A fast, modern visual diff tool built with Tauri, React, and Monaco Editor. Comp
 
 ## Prerequisites
 
-Before you can build and run this application, you need:
-
-1. **Node.js** (v18 or later) and npm
-2. **Rust** - Install from [rustup.rs](https://rustup.rs)
-3. **Tauri prerequisites** for your OS:
-   - **macOS**: Xcode Command Line Tools
-   - **Windows**: Microsoft Visual Studio C++ Build Tools
-   - **Linux**: Several packages (see [Tauri prerequisites](https://tauri.app/start/prerequisites/))
+This guide assumes you have **Homebrew** installed. If you don't have Homebrew, install it from [brew.sh](https://brew.sh).
 
 ## Installation
 
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
+### Step 1: Install Node.js and npm
 
-2. **Build the application**:
-   ```bash
-   npm run tauri build
-   ```
+Node.js includes npm (Node Package Manager):
 
-   This creates a standalone executable in `src-tauri/target/release/`.
+```bash
+brew install node
+```
 
-   On macOS, you'll also find a `.app` bundle and `.dmg` installer in `src-tauri/target/release/bundle/`.
+Verify the installation:
+```bash
+node --version
+npm --version
+```
+
+### Step 2: Install Rust
+
+Rust is required for building the Tauri backend:
+
+```bash
+brew install rust
+```
+
+Verify the installation:
+```bash
+rustc --version
+cargo --version
+```
+
+### Step 3: Install macOS Prerequisites
+
+Install Xcode Command Line Tools (required for building Rust projects):
+
+```bash
+xcode-select --install
+```
+
+### Step 4: Install Project Dependencies
+
+Clone the repository (if you haven't already) and install npm dependencies:
+
+```bash
+cd difftool
+npm install
+```
+
+This will install:
+- React and React DOM
+- Tauri CLI and API
+- Monaco Editor
+- TypeScript and Vite
+- All other project dependencies
+
+### Step 5: Build the Application
+
+Build the application:
+
+```bash
+npm run tauri build
+```
+
+This creates a standalone executable in `src-tauri/target/release/`.
+
+On macOS, you'll also find a `.app` bundle and `.dmg` installer in `src-tauri/target/release/bundle/`.
 
 ## Development
 
@@ -157,8 +200,9 @@ The app uses Monaco's DiffEditor component with these key features:
 - Clear browser cache if running in dev mode
 
 **Rust not found?**
-- Install Rust from [rustup.rs](https://rustup.rs)
-- Restart your terminal after installation
+- Install Rust with Homebrew: `brew install rust`
+- Verify installation: `rustc --version`
+- Restart your terminal after installation if needed
 
 **Build fails on macOS?**
 - Install Xcode Command Line Tools: `xcode-select --install`

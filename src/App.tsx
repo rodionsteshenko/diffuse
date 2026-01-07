@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event';
 import type { editor } from 'monaco-editor';
 import { DiffViewer } from './components/DiffViewer';
 import { NavigationBar } from './components/NavigationBar';
+import { AIChatModal } from './components/AIChatModal';
 import { useDiffNavigation } from './hooks/useDiffNavigation';
 import { FileInfo } from './types';
 import './App.css';
@@ -15,6 +16,15 @@ function App() {
   const [rightContent, setRightContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [isAIAvailable, setIsAIAvailable] = useState(false);
+  const [aiMessages, setAiMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [aiStatus, setAiStatus] = useState<'idle' | 'thinking' | 'ready'>('idle');
+
+  // Debug logging for AI availability
+  useEffect(() => {
+    console.log('App - isAIAvailable state:', isAIAvailable);
+  }, [isAIAvailable]);
   const [fontSize, setFontSize] = useState(() => {
     const saved = localStorage.getItem('diffuse-fontSize');
     return saved ? parseInt(saved, 10) : 14;
@@ -64,6 +74,93 @@ function App() {
     localStorage.setItem('diffuse-fontFamily', fontFamily);
   }, [fontFamily]);
 
+  // Clear AI messages when files change - always regenerate analysis
+  useEffect(() => {
+    // Clear messages whenever file content changes
+    if (leftContent && rightContent) {
+      setAiMessages([]);
+      setAiStatus('idle');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftContent, rightContent, leftFile?.path, rightFile?.path]);
+
+  // Generate initial AI summary when files are loaded and AI is available
+  useEffect(() => {
+    const generateInitialSummary = async () => {
+      // Only generate if we have files, AI is available, and we don't already have messages
+      if (!leftContent || !rightContent || !isAIAvailable || aiMessages.length > 0) {
+        return;
+      }
+
+      const leftFileName = leftFile?.path || 'Left File';
+      const rightFileName = rightFile?.path || 'Right File';
+
+      // Generate the full prompt with complete file contents
+      const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please summarize the new changes being made.
+
+**Before (${leftFileName}):**
+\`\`\`
+${leftContent}
+\`\`\`
+
+**After (${rightFileName}):**
+\`\`\`
+${rightContent}
+\`\`\`
+
+Please analyze this diff and summarize the changes using the following markdown template:
+
+## Summary
+
+Brief overview of what changed and why.
+
+## Changes
+
+### Additions
+- List any new code, functions, or features added
+
+### Deletions
+- List any code, functions, or features removed
+
+### Modifications
+- List any existing code that was changed
+
+## Patterns & Notable Differences
+
+- Any patterns or notable differences observed
+
+---
+
+Focus on summarizing the new changes being made. Format your response exactly like this template, using proper markdown syntax.`;
+
+      setAiStatus('thinking');
+      const userMessage = { role: 'user' as const, content: diffPrompt };
+      setAiMessages([userMessage]);
+
+      try {
+        const apiMessages = [{
+          role: 'user',
+          content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${diffPrompt}`,
+        }];
+
+        const response = await invoke<string>('send_lm_studio_message', { messages: apiMessages });
+        const assistantMessage = { role: 'assistant' as const, content: response || 'No response received' };
+        setAiMessages([userMessage, assistantMessage]);
+        setAiStatus('ready');
+      } catch (error) {
+        const errorMessage = { 
+          role: 'assistant' as const, 
+          content: `Error: ${error instanceof Error ? error.message : String(error)}` 
+        };
+        setAiMessages([userMessage, errorMessage]);
+        setAiStatus('ready');
+      }
+    };
+
+    generateInitialSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leftContent, rightContent, isAIAvailable, leftFile, rightFile]);
+
   // Listen for system theme changes
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
@@ -75,6 +172,26 @@ function App() {
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  // Check if LM Studio is available using Rust command (logs to terminal)
+  useEffect(() => {
+    const checkLMStudio = async () => {
+      try {
+        const available = await invoke<boolean>('check_lm_studio_available');
+        console.log('LM Studio available:', available);
+        setIsAIAvailable(available);
+      } catch (error) {
+        console.error('LM Studio check error:', error);
+        setIsAIAvailable(false);
+      }
+    };
+    
+    // Check immediately
+    checkLMStudio();
+    // Check every 5 seconds
+    const interval = setInterval(checkLMStudio, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   // Load files on mount
@@ -275,6 +392,9 @@ function App() {
         onFontSizeChange={setFontSize}
         fontFamily={fontFamily}
         onFontFamilyChange={setFontFamily}
+        onAIChatClick={() => setIsAIChatOpen(true)}
+        isAIAvailable={isAIAvailable}
+        aiStatus={aiStatus}
       />
       <DiffViewer
         leftContent={leftContent}
@@ -287,6 +407,19 @@ function App() {
         fontFamily={fontFamily}
         onMount={handleEditorMount}
         onDiffClick={handleDiffClick}
+      />
+      <AIChatModal
+        isOpen={isAIChatOpen}
+        onClose={() => setIsAIChatOpen(false)}
+        leftContent={leftContent}
+        rightContent={rightContent}
+        leftFileName={leftFile?.path || 'Left File'}
+        rightFileName={rightFile?.path || 'Right File'}
+        isDarkMode={isDarkMode}
+        isAIAvailable={isAIAvailable}
+        initialMessages={aiMessages}
+        onMessagesChange={setAiMessages}
+        onStatusChange={setAiStatus}
       />
     </div>
   );

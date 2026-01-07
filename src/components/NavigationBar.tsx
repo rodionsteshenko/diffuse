@@ -10,6 +10,9 @@ interface NavigationBarProps {
   onFontSizeChange: (size: number) => void;
   fontFamily: string;
   onFontFamilyChange: (family: string) => void;
+  onAIChatClick?: () => void;
+  isAIAvailable?: boolean;
+  aiStatus?: 'idle' | 'thinking' | 'ready';
 }
 
 const FONT_FAMILIES = [
@@ -29,7 +32,14 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   onFontSizeChange,
   fontFamily,
   onFontFamilyChange,
+  onAIChatClick,
+  isAIAvailable = false,
+  aiStatus = 'idle',
 }) => {
+  // Debug logging
+  useEffect(() => {
+    console.log('NavigationBar - isAIAvailable:', isAIAvailable, 'onAIChatClick:', !!onAIChatClick);
+  }, [isAIAvailable, onAIChatClick]);
   // Detect system theme
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
@@ -68,6 +78,51 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       flexShrink: 0,
       margin: 0,
     }}>
+      {/* AI Chat Button - show when LM Studio is available or when callback is provided */}
+      {onAIChatClick && (
+        <div style={{ display: 'flex', gap: '8px', borderLeft: `1px solid ${borderColor}`, paddingLeft: '12px' }}>
+          <button
+            onClick={onAIChatClick}
+            title={
+              !isAIAvailable ? "AI Diff Analysis (LM Studio - checking availability...)" :
+              aiStatus === 'thinking' ? "AI is analyzing the diff..." :
+              aiStatus === 'ready' ? "AI Diff Analysis (Ready)" :
+              "AI Diff Analysis (LM Studio)"
+            }
+            style={{
+              ...buttonStyle,
+              backgroundColor: 
+                !isAIAvailable ? '#888888' :
+                aiStatus === 'thinking' ? '#ff9800' :
+                aiStatus === 'ready' ? '#4caf50' :
+                '#4caf50',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: isAIAvailable ? 1 : 0.7,
+            }}
+          >
+            {aiStatus === 'thinking' ? (
+              <>
+                <span style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>🤔</span>
+                <span>AI Thinking...</span>
+              </>
+            ) : aiStatus === 'ready' ? (
+              <>
+                <span>✨</span>
+                <span>AI Ready</span>
+              </>
+            ) : (
+              <>
+                <span>🤖</span>
+                <span>AI</span>
+                {!isAIAvailable && <span style={{ fontSize: '10px', marginLeft: '4px' }}>?</span>}
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Navigation controls */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button

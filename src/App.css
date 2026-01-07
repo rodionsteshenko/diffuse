@@ -163,3 +163,12 @@ button {
 .monaco-editor.vs-dark .current-diff-glyph {
   background-color: #ff8c00 !important;
 }
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

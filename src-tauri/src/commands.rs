@@ -5,6 +5,7 @@ use std::time::Duration;
 use notify::{Watcher, RecursiveMode};
 use tauri::{AppHandle, Emitter, Manager};
 use crate::AppState;
+use serde_json::Value;
 
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, String> {
@@ -117,4 +118,116 @@ pub fn watch_files(
     });
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn check_lm_studio_available() -> Result<bool, String> {
+    println!("🔍 Checking LM Studio availability at http://localhost:1234/v1/models");
+    
+    let client = reqwest::Client::new();
+    match client
+        .get("http://localhost:1234/v1/models")
+        .header("Content-Type", "application/json")
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status = response.status();
+            println!("📡 LM Studio response status: {}", status);
+            
+            if status.is_success() {
+                match response.json::<Value>().await {
+                    Ok(data) => {
+                        println!("✅ LM Studio is available! Models: {:?}", data);
+                        Ok(true)
+                    }
+                    Err(e) => {
+                        println!("⚠️ LM Studio responded but JSON parse failed: {}", e);
+                        Ok(false)
+                    }
+                }
+            } else {
+                println!("❌ LM Studio returned status: {}", status);
+                Ok(false)
+            }
+        }
+        Err(e) => {
+            println!("❌ LM Studio check failed: {}", e);
+            Ok(false)
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct ChatMessage {
+    role: String,
+    content: String,
+}
+
+#[tauri::command]
+pub async fn send_lm_studio_message(messages: Vec<ChatMessage>) -> Result<String, String> {
+    println!("💬 Sending message to LM Studio with {} messages", messages.len());
+    
+    let client = reqwest::Client::new();
+    
+    // Build the request body
+    let request_body = serde_json::json!({
+        "model": "local-model",
+        "messages": messages.iter().map(|m| {
+            serde_json::json!({
+                "role": m.role,
+                "content": m.content
+            })
+        }).collect::<Vec<_>>(),
+        "temperature": 0.7,
+        "stream": false,
+    });
+    
+    println!("📤 Request body: {}", serde_json::to_string(&request_body).unwrap_or_default());
+    
+    match client
+        .post("http://localhost:1234/v1/chat/completions")
+        .header("Content-Type", "application/json")
+        .timeout(Duration::from_secs(60))
+        .json(&request_body)
+        .send()
+        .await
+    {
+        Ok(response) => {
+            let status = response.status();
+            println!("📡 LM Studio chat response status: {}", status);
+            
+            if status.is_success() {
+                match response.json::<Value>().await {
+                    Ok(data) => {
+                        println!("✅ LM Studio response received");
+                        // Extract the content from the response
+                        if let Some(choices) = data.get("choices").and_then(|c| c.as_array()) {
+                            if let Some(first_choice) = choices.get(0) {
+                                if let Some(message) = first_choice.get("message") {
+                                    if let Some(content) = message.get("content").and_then(|c| c.as_str()) {
+                                        return Ok(content.to_string());
+                                    }
+                                }
+                            }
+                        }
+                        Err("No content in response".to_string())
+                    }
+                    Err(e) => {
+                        println!("❌ LM Studio JSON parse error: {}", e);
+                        Err(format!("Failed to parse response: {}", e))
+                    }
+                }
+            } else {
+                let error_text = response.text().await.unwrap_or_default();
+                println!("❌ LM Studio returned error: {} - {}", status, error_text);
+                Err(format!("LM Studio API error: {} - {}", status, error_text))
+            }
+        }
+        Err(e) => {
+            println!("❌ LM Studio request failed: {}", e);
+            Err(format!("Failed to connect to LM Studio: {}", e))
+        }
+    }
 }

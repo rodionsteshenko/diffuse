@@ -6,15 +6,6 @@ interface NavigationBarProps {
   totalDiffs: number;
   onPrevious: () => void;
   onNext: () => void;
-  onCopyLeftToRight: () => void;
-  onCopyRightToLeft: () => void;
-  onSaveLeft: () => void;
-  onSaveRight: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  leftFile: FileInfo | null;
-  rightFile: FileInfo | null;
-  isSaving: boolean;
   fontSize: number;
   onFontSizeChange: (size: number) => void;
   fontFamily: string;
@@ -34,15 +25,6 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   totalDiffs,
   onPrevious,
   onNext,
-  onCopyLeftToRight,
-  onCopyRightToLeft,
-  onSaveLeft,
-  onSaveRight,
-  onUndo,
-  onRedo,
-  leftFile,
-  rightFile,
-  isSaving,
   fontSize,
   onFontSizeChange,
   fontFamily,
@@ -83,26 +65,9 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       borderBottom: `1px solid ${borderColor}`,
       color: textColor,
       fontSize: '13px',
+      flexShrink: 0,
+      margin: 0,
     }}>
-      {/* Undo/Redo controls */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          onClick={onUndo}
-          title="Undo (Cmd/Ctrl+Z)"
-          style={buttonStyle}
-        >
-          ↶ Undo
-        </button>
-
-        <button
-          onClick={onRedo}
-          title="Redo (Cmd/Ctrl+Shift+Z)"
-          style={buttonStyle}
-        >
-          ↷ Redo
-        </button>
-      </div>
-
       {/* Navigation controls */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button
@@ -125,48 +90,6 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
           style={buttonStyle}
         >
           Next ↓
-        </button>
-      </div>
-
-      {/* Copy controls */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          onClick={onCopyLeftToRight}
-          disabled={totalDiffs === 0}
-          title="Copy current diff from left to right (Alt+→)"
-          style={buttonStyle}
-        >
-          Left → Right
-        </button>
-
-        <button
-          onClick={onCopyRightToLeft}
-          disabled={totalDiffs === 0}
-          title="Copy current diff from right to left (Alt+←)"
-          style={buttonStyle}
-        >
-          Right → Left
-        </button>
-      </div>
-
-      {/* Save controls */}
-      <div style={{ display: 'flex', gap: '8px' }}>
-        <button
-          onClick={onSaveLeft}
-          disabled={!leftFile || isSaving}
-          title="Save left file (Cmd/Ctrl+Shift+S)"
-          style={buttonStyle}
-        >
-          {isSaving ? 'Saving...' : 'Save Left'}
-        </button>
-
-        <button
-          onClick={onSaveRight}
-          disabled={!rightFile || isSaving}
-          title="Save right file (Cmd/Ctrl+S)"
-          style={buttonStyle}
-        >
-          {isSaving ? 'Saving...' : 'Save Right'}
         </button>
       </div>
 

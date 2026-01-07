@@ -13,7 +13,6 @@ function App() {
   const [rightFile, setRightFile] = useState<FileInfo | null>(null);
   const [leftContent, setLeftContent] = useState('');
   const [rightContent, setRightContent] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fontSize, setFontSize] = useState(() => {
@@ -36,7 +35,6 @@ function App() {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const leftFileRef = useRef<FileInfo | null>(null);
   const rightFileRef = useRef<FileInfo | null>(null);
-  const lastFocusedEditorRef = useRef<'original' | 'modified'>('modified');
 
   // Keep refs in sync with state
   useEffect(() => {
@@ -156,12 +154,7 @@ function App() {
     };
   }, []);
 
-  // Track which editor was last focused for undo/redo
-  const handleEditorFocus = useCallback((side: 'original' | 'modified') => {
-    lastFocusedEditorRef.current = side;
-  }, []);
-
-  // Update diff changes when editor mounts or content changes
+  // Update diff changes when editor mounts
   const handleEditorMount = useCallback((editor: editor.IStandaloneDiffEditor) => {
     editorRef.current = editor;
     setEditorRef(editor);
@@ -209,239 +202,6 @@ function App() {
     }
   }, [setCurrentDiffIndex]);
 
-  // Copy operations
-  const copyLeftToRight = useCallback(() => {
-    if (!editorRef.current || totalDiffs === 0) return;
-
-    const changes = editorRef.current.getLineChanges();
-    if (!changes || changes.length === 0) return;
-
-    const currentChange = changes[currentDiffIndex];
-    const originalEditor = editorRef.current.getOriginalEditor();
-    const modifiedEditor = editorRef.current.getModifiedEditor();
-    const modifiedModel = modifiedEditor.getModel();
-    if (!modifiedModel) return;
-
-    if (currentChange.originalEndLineNumber === 0) {
-      // Deletion in original - remove from modified
-      modifiedModel.pushEditOperations(
-        [],
-        [{
-          range: {
-            startLineNumber: currentChange.modifiedStartLineNumber,
-            startColumn: 1,
-            endLineNumber: currentChange.modifiedEndLineNumber,
-            endColumn: modifiedModel.getLineMaxColumn(currentChange.modifiedEndLineNumber) || 1,
-          },
-          text: '',
-        }],
-        () => null
-      );
-    } else {
-      // Get content from original
-      const originalModel = originalEditor.getModel();
-      if (!originalModel) return;
-
-      const textToCopy = originalModel.getValueInRange({
-        startLineNumber: currentChange.originalStartLineNumber,
-        startColumn: 1,
-        endLineNumber: currentChange.originalEndLineNumber,
-        endColumn: originalModel.getLineMaxColumn(currentChange.originalEndLineNumber),
-      });
-
-      // Replace in modified
-      if (currentChange.modifiedEndLineNumber === 0) {
-        // Insertion - add to modified
-        const lineNumber = currentChange.modifiedStartLineNumber;
-        modifiedModel.pushEditOperations(
-          [],
-          [{
-            range: {
-              startLineNumber: lineNumber,
-              startColumn: 1,
-              endLineNumber: lineNumber,
-              endColumn: 1,
-            },
-            text: textToCopy + '\n',
-          }],
-          () => null
-        );
-      } else {
-        // Modification - replace in modified
-        modifiedModel.pushEditOperations(
-          [],
-          [{
-            range: {
-              startLineNumber: currentChange.modifiedStartLineNumber,
-              startColumn: 1,
-              endLineNumber: currentChange.modifiedEndLineNumber,
-              endColumn: modifiedModel.getLineMaxColumn(currentChange.modifiedEndLineNumber) || 1,
-            },
-            text: textToCopy,
-          }],
-          () => null
-        );
-      }
-    }
-
-    // Note: setRightContent is handled by the onDidChangeModelContent listener in DiffViewer
-  }, [currentDiffIndex, totalDiffs]);
-
-  const copyRightToLeft = useCallback(() => {
-    if (!editorRef.current || totalDiffs === 0) return;
-
-    const changes = editorRef.current.getLineChanges();
-    if (!changes || changes.length === 0) return;
-
-    const currentChange = changes[currentDiffIndex];
-    const originalEditor = editorRef.current.getOriginalEditor();
-    const modifiedEditor = editorRef.current.getModifiedEditor();
-    const originalModel = originalEditor.getModel();
-    if (!originalModel) return;
-
-    if (currentChange.modifiedEndLineNumber === 0) {
-      // Deletion in modified - remove from original
-      originalModel.pushEditOperations(
-        [],
-        [{
-          range: {
-            startLineNumber: currentChange.originalStartLineNumber,
-            startColumn: 1,
-            endLineNumber: currentChange.originalEndLineNumber,
-            endColumn: originalModel.getLineMaxColumn(currentChange.originalEndLineNumber) || 1,
-          },
-          text: '',
-        }],
-        () => null
-      );
-    } else {
-      // Get content from modified
-      const modifiedModel = modifiedEditor.getModel();
-      if (!modifiedModel) return;
-
-      const textToCopy = modifiedModel.getValueInRange({
-        startLineNumber: currentChange.modifiedStartLineNumber,
-        startColumn: 1,
-        endLineNumber: currentChange.modifiedEndLineNumber,
-        endColumn: modifiedModel.getLineMaxColumn(currentChange.modifiedEndLineNumber),
-      });
-
-      // Replace in original
-      if (currentChange.originalEndLineNumber === 0) {
-        // Insertion - add to original
-        const lineNumber = currentChange.originalStartLineNumber;
-        originalModel.pushEditOperations(
-          [],
-          [{
-            range: {
-              startLineNumber: lineNumber,
-              startColumn: 1,
-              endLineNumber: lineNumber,
-              endColumn: 1,
-            },
-            text: textToCopy + '\n',
-          }],
-          () => null
-        );
-      } else {
-        // Modification - replace in original
-        originalModel.pushEditOperations(
-          [],
-          [{
-            range: {
-              startLineNumber: currentChange.originalStartLineNumber,
-              startColumn: 1,
-              endLineNumber: currentChange.originalEndLineNumber,
-              endColumn: originalModel.getLineMaxColumn(currentChange.originalEndLineNumber) || 1,
-            },
-            text: textToCopy,
-          }],
-          () => null
-        );
-      }
-    }
-
-    // Note: setLeftContent is handled by the onDidChangeModelContent listener in DiffViewer
-  }, [currentDiffIndex, totalDiffs]);
-
-  // Undo/Redo operations
-  const handleUndo = useCallback(() => {
-    if (!editorRef.current) return;
-
-    const originalEditor = editorRef.current.getOriginalEditor();
-    const modifiedEditor = editorRef.current.getModifiedEditor();
-
-    // Use the last focused editor (tracked via focus events)
-    if (lastFocusedEditorRef.current === 'original') {
-      const model = originalEditor.getModel();
-      if (model) {
-        originalEditor.focus();
-        model.undo();
-      }
-    } else {
-      const model = modifiedEditor.getModel();
-      if (model) {
-        modifiedEditor.focus();
-        model.undo();
-      }
-    }
-  }, []);
-
-  const handleRedo = useCallback(() => {
-    if (!editorRef.current) return;
-
-    const originalEditor = editorRef.current.getOriginalEditor();
-    const modifiedEditor = editorRef.current.getModifiedEditor();
-
-    // Use the last focused editor (tracked via focus events)
-    if (lastFocusedEditorRef.current === 'original') {
-      const model = originalEditor.getModel();
-      if (model) {
-        originalEditor.focus();
-        model.redo();
-      }
-    } else {
-      const model = modifiedEditor.getModel();
-      if (model) {
-        modifiedEditor.focus();
-        model.redo();
-      }
-    }
-  }, []);
-
-  // Save operations
-  const saveLeft = useCallback(async () => {
-    if (!leftFile || !editorRef.current) return;
-
-    setIsSaving(true);
-    try {
-      const content = editorRef.current.getOriginalEditor().getValue();
-      await invoke('write_file', { path: leftFile.absolutePath, content });
-      setLeftFile({ ...leftFile, content });
-      setLeftContent(content);
-    } catch (err) {
-      alert(`Failed to save left file: ${err}`);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [leftFile]);
-
-  const saveRight = useCallback(async () => {
-    if (!rightFile || !editorRef.current) return;
-
-    setIsSaving(true);
-    try {
-      const content = editorRef.current.getModifiedEditor().getValue();
-      await invoke('write_file', { path: rightFile.absolutePath, content });
-      setRightFile({ ...rightFile, content });
-      setRightContent(content);
-    } catch (err) {
-      alert(`Failed to save right file: ${err}`);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [rightFile]);
-
   // Font size controls
   const increaseFontSize = useCallback(() => {
     setFontSize(prev => Math.min(prev + 2, 40));
@@ -451,35 +211,21 @@ function App() {
     setFontSize(prev => Math.max(prev - 2, 8));
   }, []);
 
-  // Keyboard shortcuts for copy, save, zoom, and undo/redo
+  // Keyboard shortcuts for zoom only (read-only mode)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === 'ArrowRight') {
-        e.preventDefault();
-        copyLeftToRight();
-      } else if (e.altKey && e.key === 'ArrowLeft') {
-        e.preventDefault();
-        copyRightToLeft();
-      } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          saveLeft();
-        } else {
-          saveRight();
-        }
-      } else if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
         increaseFontSize();
       } else if ((e.metaKey || e.ctrlKey) && (e.key === '-' || e.key === '_')) {
         e.preventDefault();
         decreaseFontSize();
       }
-      // Note: Undo/Redo (Cmd+Z/Cmd+Shift+Z) are handled natively by Monaco Editor
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [copyLeftToRight, copyRightToLeft, saveLeft, saveRight, increaseFontSize, decreaseFontSize]);
+  }, [increaseFontSize, decreaseFontSize]);
 
   const backgroundColor = isDarkMode ? '#1e1e1e' : '#ffffff';
   const textColor = isDarkMode ? '#cccccc' : '#333333';
@@ -519,21 +265,12 @@ function App() {
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor, overflow: 'hidden' }}>
+    <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column', backgroundColor, overflow: 'hidden', margin: 0, padding: 0 }}>
       <NavigationBar
         currentDiffIndex={currentDiffIndex}
         totalDiffs={totalDiffs}
         onPrevious={goToPreviousDiff}
         onNext={goToNextDiff}
-        onCopyLeftToRight={copyLeftToRight}
-        onCopyRightToLeft={copyRightToLeft}
-        onSaveLeft={saveLeft}
-        onSaveRight={saveRight}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
-        leftFile={leftFile}
-        rightFile={rightFile}
-        isSaving={isSaving}
         fontSize={fontSize}
         onFontSizeChange={setFontSize}
         fontFamily={fontFamily}
@@ -549,10 +286,7 @@ function App() {
         fontSize={fontSize}
         fontFamily={fontFamily}
         onMount={handleEditorMount}
-        onContentChange={setRightContent}
-        onLeftContentChange={setLeftContent}
         onDiffClick={handleDiffClick}
-        onEditorFocus={handleEditorFocus}
       />
     </div>
   );

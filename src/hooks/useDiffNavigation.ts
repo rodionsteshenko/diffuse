@@ -6,7 +6,8 @@ export const useDiffNavigation = () => {
   const [currentDiffIndex, setCurrentDiffIndex] = useState(0);
   const [diffChanges, setDiffChanges] = useState<DiffChange[]>([]);
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
-  const decorationsRef = useRef<string[]>([]);
+  const originalDecorationsRef = useRef<string[]>([]);
+  const modifiedDecorationsRef = useRef<string[]>([]);
 
   const updateDiffChanges = useCallback((editor: editor.IStandaloneDiffEditor) => {
     // Give Monaco time to compute diffs
@@ -27,30 +28,56 @@ export const useDiffNavigation = () => {
   const highlightCurrentDiff = useCallback(() => {
     if (!editorRef.current || diffChanges.length === 0) return;
 
+    const originalEditor = editorRef.current.getOriginalEditor();
     const modifiedEditor = editorRef.current.getModifiedEditor();
     const change = diffChanges[currentDiffIndex];
 
     if (!change) return;
 
-    // Clear previous decorations
-    if (decorationsRef.current.length > 0) {
-      decorationsRef.current = modifiedEditor.deltaDecorations(decorationsRef.current, []);
+    // Clear previous decorations from both editors
+    if (originalDecorationsRef.current.length > 0) {
+      originalDecorationsRef.current = originalEditor.deltaDecorations(originalDecorationsRef.current, []);
+    }
+    if (modifiedDecorationsRef.current.length > 0) {
+      modifiedDecorationsRef.current = modifiedEditor.deltaDecorations(modifiedDecorationsRef.current, []);
     }
 
-    // Add new decoration for current diff
-    const startLine = change.modifiedStartLineNumber || 1;
-    const endLine = change.modifiedEndLineNumber || startLine;
-
-    decorationsRef.current = modifiedEditor.deltaDecorations([], [
-      {
-        range: new (window as any).monaco.Range(startLine, 1, endLine, 1),
-        options: {
-          isWholeLine: true,
-          className: 'current-diff-highlight',
-          glyphMarginClassName: 'current-diff-glyph',
+    // Add decorations to both editors
+    // Highlight original side (left)
+    if (change.originalStartLineNumber > 0 && change.originalEndLineNumber > 0) {
+      const originalStart = change.originalStartLineNumber;
+      const originalEnd = change.originalEndLineNumber;
+      originalDecorationsRef.current = originalEditor.deltaDecorations([], [
+        {
+          range: new (window as any).monaco.Range(originalStart, 1, originalEnd, 1),
+          options: {
+            isWholeLine: true,
+            className: 'current-diff-highlight',
+            glyphMarginClassName: 'current-diff-glyph',
+          },
         },
-      },
-    ]);
+      ]);
+    } else {
+      originalDecorationsRef.current = [];
+    }
+
+    // Highlight modified side (right)
+    if (change.modifiedStartLineNumber > 0) {
+      const modifiedStart = change.modifiedStartLineNumber;
+      const modifiedEnd = change.modifiedEndLineNumber > 0 ? change.modifiedEndLineNumber : modifiedStart;
+      modifiedDecorationsRef.current = modifiedEditor.deltaDecorations([], [
+        {
+          range: new (window as any).monaco.Range(modifiedStart, 1, modifiedEnd, 1),
+          options: {
+            isWholeLine: true,
+            className: 'current-diff-highlight',
+            glyphMarginClassName: 'current-diff-glyph',
+          },
+        },
+      ]);
+    } else {
+      modifiedDecorationsRef.current = [];
+    }
   }, [diffChanges, currentDiffIndex]);
 
   const goToNextDiff = useCallback(() => {

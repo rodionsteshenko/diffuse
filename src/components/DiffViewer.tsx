@@ -12,10 +12,7 @@ interface DiffViewerProps {
   fontSize: number;
   fontFamily: string;
   onMount?: (editor: editor.IStandaloneDiffEditor) => void;
-  onContentChange?: (modifiedContent: string) => void;
-  onLeftContentChange?: (originalContent: string) => void;
   onDiffClick?: (lineNumber: number) => void;
-  onEditorFocus?: (side: 'original' | 'modified') => void;
 }
 
 const getLanguageFromPath = (path: string): string => {
@@ -61,10 +58,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   fontSize,
   fontFamily,
   onMount,
-  onContentChange,
-  onLeftContentChange,
   onDiffClick,
-  onEditorFocus,
 }) => {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const language = getLanguageFromPath(rightPath);
@@ -113,39 +107,17 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const handleEditorMount = (editor: editor.IStandaloneDiffEditor) => {
     editorRef.current = editor;
 
-    // Listen for content changes in the modified (right) editor
+    // Listen for clicks to detect which diff was clicked (read-only mode)
     const modifiedEditor = editor.getModifiedEditor();
-    modifiedEditor.onDidChangeModelContent(() => {
-      const newContent = modifiedEditor.getValue();
-      onContentChange?.(newContent);
-    });
-
-    // Listen for content changes in the original (left) editor
     const originalEditor = editor.getOriginalEditor();
-    originalEditor.onDidChangeModelContent(() => {
-      const newContent = originalEditor.getValue();
-      onLeftContentChange?.(newContent);
-    });
 
-    // Track which editor is focused/clicked for undo/redo
-    originalEditor.onDidFocusEditorWidget(() => {
-      onEditorFocus?.('original');
-    });
-
-    modifiedEditor.onDidFocusEditorWidget(() => {
-      onEditorFocus?.('modified');
-    });
-
-    // Listen for clicks to detect which diff was clicked AND which editor was clicked
     modifiedEditor.onMouseDown((e) => {
-      onEditorFocus?.('modified');
       if (e.target.position) {
         onDiffClick?.(e.target.position.lineNumber);
       }
     });
 
     originalEditor.onMouseDown((e) => {
-      onEditorFocus?.('original');
       if (e.target.position) {
         onDiffClick?.(e.target.position.lineNumber);
       }
@@ -172,7 +144,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const rightHeaderBg = isDarkMode ? '#1e1e1e' : '#ffffff';
 
   return (
-    <div style={{ height: 'calc(100vh - 100px)', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden', margin: 0, padding: 0 }}>
       {/* File name headers */}
       <div style={{
         display: 'flex',
@@ -215,7 +187,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       </div>
 
       {/* Diff Editor */}
-      <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
+      <div style={{ flex: 1, width: '100%', minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <DiffEditor
           original={leftContent}
           modified={rightContent}
@@ -223,8 +195,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           theme={theme}
           options={{
             renderSideBySide: true,
-            readOnly: false,
-            originalEditable: true, // Make the original (left) editor editable!
+            readOnly: true,
+            originalEditable: false,
             scrollBeyondLastLine: false,
             minimap: { enabled: true },
             fontSize,
@@ -233,7 +205,12 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             folding: true,
             wordWrap: 'off',
             automaticLayout: true,
-            renderMarginRevertIcon: true, // Show revert icons in gutter (left→right only, by design)
+            renderMarginRevertIcon: false, // Disable revert icons - read-only mode
+            scrollbar: {
+              vertical: 'auto',
+              horizontal: 'auto',
+              useShadows: false,
+            },
           }}
           onMount={handleEditorMount}
         />

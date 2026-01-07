@@ -1,0 +1,11 @@
+Hello World!
+This is a test file for DiffTool.
+
+Line 4: This line exists in both files.
+Line 5: This line is different in the left file.
+Line 6: Another common line.
+Line 7: Only in left file.
+
+Line 9: Common line.
+Line 10: This will be modified.
+Line 11: Last line.

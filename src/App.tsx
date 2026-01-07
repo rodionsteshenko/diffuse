@@ -17,11 +17,11 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [fontSize, setFontSize] = useState(() => {
-    const saved = localStorage.getItem('difftool-fontSize');
+    const saved = localStorage.getItem('diffuse-fontSize');
     return saved ? parseInt(saved, 10) : 14;
   });
   const [fontFamily, setFontFamily] = useState(() => {
-    const saved = localStorage.getItem('difftool-fontFamily');
+    const saved = localStorage.getItem('diffuse-fontFamily');
     return saved || 'Monaco';
   });
 
@@ -59,11 +59,11 @@ function App() {
 
   // Save font preferences to localStorage
   useEffect(() => {
-    localStorage.setItem('difftool-fontSize', fontSize.toString());
+    localStorage.setItem('diffuse-fontSize', fontSize.toString());
   }, [fontSize]);
 
   useEffect(() => {
-    localStorage.setItem('difftool-fontFamily', fontFamily);
+    localStorage.setItem('diffuse-fontFamily', fontFamily);
   }, [fontFamily]);
 
   // Listen for system theme changes
@@ -87,26 +87,27 @@ function App() {
         const [leftPath, rightPath] = await invoke<[string | null, string | null]>('get_cli_args');
 
         if (!leftPath || !rightPath) {
-          setError('Please provide two file paths as arguments.\nUsage: difftool <left-file> <right-file>');
+          setError('Please provide two file paths as arguments.\nUsage: diffuse <left-file> <right-file>');
           setIsLoading(false);
           return;
         }
 
-        // Resolve absolute paths
+        // Resolve absolute paths (preserve original paths for display)
         const leftAbsPath = await invoke<string>('get_absolute_path', { path: leftPath });
         const rightAbsPath = await invoke<string>('get_absolute_path', { path: rightPath });
 
-        // Read file contents
+        // Read file contents using absolute paths
         const leftFileContent = await invoke<string>('read_file', { path: leftAbsPath });
         const rightFileContent = await invoke<string>('read_file', { path: rightAbsPath });
 
-        setLeftFile({ path: leftAbsPath, content: leftFileContent });
-        setRightFile({ path: rightAbsPath, content: rightFileContent });
+        // Store both original path (for display) and absolute path (for operations)
+        setLeftFile({ path: leftPath, absolutePath: leftAbsPath, content: leftFileContent });
+        setRightFile({ path: rightPath, absolutePath: rightAbsPath, content: rightFileContent });
         setLeftContent(leftFileContent);
         setRightContent(rightFileContent);
         setIsLoading(false);
 
-        // Start watching files for changes
+        // Start watching files for changes (use absolute paths)
         await invoke('watch_files', {
           leftPath: leftAbsPath,
           rightPath: rightAbsPath
@@ -133,16 +134,17 @@ function App() {
         const currentLeftFile = leftFileRef.current;
         const currentRightFile = rightFileRef.current;
 
-        if (currentLeftFile && changedPath === currentLeftFile.path) {
+        // Compare with absolute paths for file watching
+        if (currentLeftFile && changedPath === currentLeftFile.absolutePath) {
           console.log('Updating LEFT file');
           setLeftFile({ ...currentLeftFile, content: newContent });
           setLeftContent(newContent);
-        } else if (currentRightFile && changedPath === currentRightFile.path) {
+        } else if (currentRightFile && changedPath === currentRightFile.absolutePath) {
           console.log('Updating RIGHT file');
           setRightFile({ ...currentRightFile, content: newContent });
           setRightContent(newContent);
         } else {
-          console.log('Path does not match either file. Changed:', changedPath, 'Left:', currentLeftFile?.path, 'Right:', currentRightFile?.path);
+          console.log('Path does not match either file. Changed:', changedPath, 'Left:', currentLeftFile?.absolutePath, 'Right:', currentRightFile?.absolutePath);
         }
       } catch (err) {
         console.error('Failed to reload file:', err);
@@ -414,7 +416,7 @@ function App() {
     setIsSaving(true);
     try {
       const content = editorRef.current.getOriginalEditor().getValue();
-      await invoke('write_file', { path: leftFile.path, content });
+      await invoke('write_file', { path: leftFile.absolutePath, content });
       setLeftFile({ ...leftFile, content });
       setLeftContent(content);
     } catch (err) {
@@ -430,7 +432,7 @@ function App() {
     setIsSaving(true);
     try {
       const content = editorRef.current.getModifiedEditor().getValue();
-      await invoke('write_file', { path: rightFile.path, content });
+      await invoke('write_file', { path: rightFile.absolutePath, content });
       setRightFile({ ...rightFile, content });
       setRightContent(content);
     } catch (err) {
@@ -517,7 +519,7 @@ function App() {
   }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor, overflow: 'hidden' }}>
       <NavigationBar
         currentDiffIndex={currentDiffIndex}
         totalDiffs={totalDiffs}
@@ -542,6 +544,8 @@ function App() {
         rightContent={rightContent}
         leftPath={leftFile?.path || ''}
         rightPath={rightFile?.path || ''}
+        leftFileName={leftFile?.path || 'Left File'}
+        rightFileName={rightFile?.path || 'Right File'}
         fontSize={fontSize}
         fontFamily={fontFamily}
         onMount={handleEditorMount}

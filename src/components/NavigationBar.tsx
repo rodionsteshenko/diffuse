@@ -84,16 +84,6 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       color: textColor,
       fontSize: '13px',
     }}>
-      {/* File info */}
-      <div style={{ flex: 1, display: 'flex', gap: '24px', fontSize: '12px' }}>
-        <div style={{ color: '#569cd6' }}>
-          Left: {leftFile?.path || 'No file'}
-        </div>
-        <div style={{ color: '#569cd6' }}>
-          Right: {rightFile?.path || 'No file'}
-        </div>
-      </div>
-
       {/* Undo/Redo controls */}
       <div style={{ display: 'flex', gap: '8px' }}>
         <button

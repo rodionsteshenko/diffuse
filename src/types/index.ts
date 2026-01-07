@@ -1,5 +1,6 @@
 export interface FileInfo {
-  path: string;
+  path: string; // Original path (can be relative or absolute)
+  absolutePath: string; // Absolute path for file operations
   content: string;
 }
 

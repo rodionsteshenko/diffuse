@@ -7,6 +7,8 @@ interface DiffViewerProps {
   rightContent: string;
   leftPath: string;
   rightPath: string;
+  leftFileName?: string; // Display name for left file
+  rightFileName?: string; // Display name for right file
   fontSize: number;
   fontFamily: string;
   onMount?: (editor: editor.IStandaloneDiffEditor) => void;
@@ -54,6 +56,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   rightContent,
   leftPath: _leftPath,
   rightPath,
+  leftFileName,
+  rightFileName,
   fontSize,
   fontFamily,
   onMount,
@@ -64,6 +68,26 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 }) => {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const language = getLanguageFromPath(rightPath);
+
+  // Detect system theme for file headers
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setIsDarkMode(e.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   // Detect system theme
   const [theme, setTheme] = useState<'vs-dark' | 'vs-light'>(() => {
@@ -141,29 +165,79 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
     }
   }, [leftContent, rightContent]);
 
+  const headerBg = isDarkMode ? '#252526' : '#f3f3f3';
+  const headerBorder = isDarkMode ? '#3e3e42' : '#e1e1e1';
+  const headerText = isDarkMode ? '#cccccc' : '#333333';
+  const leftHeaderBg = isDarkMode ? '#1e1e1e' : '#ffffff';
+  const rightHeaderBg = isDarkMode ? '#1e1e1e' : '#ffffff';
+
   return (
-    <div style={{ height: 'calc(100vh - 100px)', width: '100%' }}>
-      <DiffEditor
-        original={leftContent}
-        modified={rightContent}
-        language={language}
-        theme={theme}
-        options={{
-          renderSideBySide: true,
-          readOnly: false,
-          originalEditable: true, // Make the original (left) editor editable!
-          scrollBeyondLastLine: false,
-          minimap: { enabled: true },
-          fontSize,
-          fontFamily,
-          lineNumbers: 'on',
-          folding: true,
-          wordWrap: 'off',
-          automaticLayout: true,
-          renderMarginRevertIcon: true, // Show revert icons in gutter (left→right only, by design)
-        }}
-        onMount={handleEditorMount}
-      />
+    <div style={{ height: 'calc(100vh - 100px)', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      {/* File name headers */}
+      <div style={{
+        display: 'flex',
+        height: '40px',
+        backgroundColor: headerBg,
+        borderBottom: `1px solid ${headerBorder}`,
+        fontSize: '14px',
+        fontWeight: '600',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+      }}>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+          backgroundColor: leftHeaderBg,
+          borderRight: `1px solid ${headerBorder}`,
+          color: headerText,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ marginRight: '8px', color: isDarkMode ? '#569cd6' : '#0066cc' }}>◀</span>
+          {leftFileName || 'Left File'}
+        </div>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+          backgroundColor: rightHeaderBg,
+          color: headerText,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          <span style={{ marginRight: '8px', color: isDarkMode ? '#569cd6' : '#0066cc' }}>▶</span>
+          {rightFileName || 'Right File'}
+        </div>
+      </div>
+
+      {/* Diff Editor */}
+      <div style={{ flex: 1, width: '100%', minHeight: 0 }}>
+        <DiffEditor
+          original={leftContent}
+          modified={rightContent}
+          language={language}
+          theme={theme}
+          options={{
+            renderSideBySide: true,
+            readOnly: false,
+            originalEditable: true, // Make the original (left) editor editable!
+            scrollBeyondLastLine: false,
+            minimap: { enabled: true },
+            fontSize,
+            fontFamily,
+            lineNumbers: 'on',
+            folding: true,
+            wordWrap: 'off',
+            automaticLayout: true,
+            renderMarginRevertIcon: true, // Show revert icons in gutter (left→right only, by design)
+          }}
+          onMount={handleEditorMount}
+        />
+      </div>
     </div>
   );
 };

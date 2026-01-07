@@ -85,18 +85,35 @@ export const useDiffNavigation = () => {
   }, [currentDiffIndex, diffChanges, highlightCurrentDiff]);
 
   useEffect(() => {
+    let lastNavigationTime = 0;
+    const NAVIGATION_THROTTLE = 30; // ms between navigations when holding key (reduced for better responsiveness)
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === 'ArrowDown') {
+      // Check for Alt/Option key (on Mac, Option key sets altKey to true)
+      if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
-        goToNextDiff();
-      } else if (e.altKey && e.key === 'ArrowUp') {
-        e.preventDefault();
-        goToPreviousDiff();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        // Throttle rapid key presses for smoother navigation when holding the key
+        const now = Date.now();
+        if (now - lastNavigationTime < NAVIGATION_THROTTLE) {
+          return;
+        }
+        lastNavigationTime = now;
+
+        if (e.key === 'ArrowDown') {
+          goToNextDiff();
+        } else if (e.key === 'ArrowUp') {
+          goToPreviousDiff();
+        }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    // Use capture phase to catch events before Monaco Editor processes them
+    // This ensures our handler runs first, even when the editor is focused
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [goToNextDiff, goToPreviousDiff]);
 
   return {

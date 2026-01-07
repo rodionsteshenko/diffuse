@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "difftool",
+  "productName": "diffuse",
   "version": "0.1.0",
-  "identifier": "com.rodion.difftool",
+  "identifier": "com.rodion.diffuse",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "DiffTool",
+        "title": "Diffuse",
         "width": 1400,
         "height": 900,
         "minWidth": 800,

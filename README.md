@@ -1,8 +1,8 @@
-# DiffTool - Visual Diff & Merge Tool
+# Diffuse - Visual Diff & Merge Tool
 
 A fast, modern visual diff tool built with Tauri, React, and Monaco Editor. Compare files side-by-side with syntax highlighting and merge changes with ease.
 
-![DiffTool](https://img.shields.io/badge/Tauri-2.0-blue) ![React](https://img.shields.io/badge/React-19-blue) ![Monaco](https://img.shields.io/badge/Monaco-VS%20Code%20Editor-blue)
+![Diffuse](https://img.shields.io/badge/Tauri-2.0-blue) ![React](https://img.shields.io/badge/React-19-blue) ![Monaco](https://img.shields.io/badge/Monaco-VS%20Code%20Editor-blue)
 
 ## Features
 
@@ -62,7 +62,7 @@ xcode-select --install
 Clone the repository (if you haven't already) and install npm dependencies:
 
 ```bash
-cd difftool
+cd diffuse
 npm install
 ```
 
@@ -104,7 +104,7 @@ The app will open with both files loaded in the diff viewer.
 npm run tauri dev -- file1.txt file2.txt
 
 # Production (after building)
-./difftool file1.txt file2.txt
+./diffuse file1.txt file2.txt
 ```
 
 ### Keyboard Shortcuts
@@ -127,11 +127,11 @@ npm run tauri dev -- file1.txt file2.txt
 
 ## Integration with Git
 
-You can use DiffTool as a git difftool:
+You can use Diffuse as a git difftool:
 
 ```bash
-git config --global diff.tool difftool
-git config --global difftool.difftool.cmd 'path/to/difftool "$LOCAL" "$REMOTE"'
+git config --global diff.tool diffuse
+git config --global difftool.diffuse.cmd 'path/to/diffuse "$LOCAL" "$REMOTE"'
 git config --global difftool.prompt false
 
 # Then use it:
@@ -141,8 +141,8 @@ git difftool file.txt
 Or as a merge tool:
 
 ```bash
-git config --global merge.tool difftool
-git config --global mergetool.difftool.cmd 'path/to/difftool "$LOCAL" "$REMOTE"'
+git config --global merge.tool diffuse
+git config --global mergetool.diffuse.cmd 'path/to/diffuse "$LOCAL" "$REMOTE"'
 git config --global mergetool.prompt false
 ```
 
@@ -157,7 +157,7 @@ git config --global mergetool.prompt false
 ## Project Structure
 
 ```
-difftool/
+diffuse/
 ├── src/                     # React frontend
 │   ├── components/          # React components
 │   │   ├── DiffViewer.tsx   # Monaco diff editor wrapper

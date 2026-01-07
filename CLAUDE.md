@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DiffTool is a visual diff and merge tool built with Tauri 2.0, React 19, and Monaco Editor. It's a lightweight (~5-10 MB) alternative to Electron-based diff tools, designed to compare files side-by-side with syntax highlighting and merge capabilities.
+Diffuse is a visual diff and merge tool built with Tauri 2.0, React 19, and Monaco Editor. It's a lightweight (~5-10 MB) alternative to Electron-based diff tools, designed to compare files side-by-side with syntax highlighting and merge capabilities.
 
 ## Development Commands
 

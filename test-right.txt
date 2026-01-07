@@ -1,5 +1,5 @@
 Hello World!
-This is a test file for DiffTool.
+This is a test file for Diffuse.
 
 Line 4: This line exists in both files.
 Line 5: This line is different in the right file.

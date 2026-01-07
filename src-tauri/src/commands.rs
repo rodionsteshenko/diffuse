@@ -1,8 +1,10 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::Duration;
 use notify::{Watcher, RecursiveMode};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+use crate::AppState;
 
 #[tauri::command]
 pub fn read_file(path: String) -> Result<String, String> {
@@ -17,14 +19,28 @@ pub fn write_file(path: String, content: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn get_absolute_path(path: String) -> Result<String, String> {
+pub fn get_absolute_path(
+    path: String,
+    app: AppHandle,
+) -> Result<String, String> {
     let path_buf = PathBuf::from(&path);
     let absolute = if path_buf.is_absolute() {
         path_buf
     } else {
-        std::env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?
-            .join(&path_buf)
+        // Use the original working directory from when the command was invoked
+        let base_dir = match app.try_state::<Mutex<AppState>>() {
+            Some(state) => {
+                let state = state.lock().map_err(|e| format!("Failed to lock state: {}", e))?;
+                state.original_working_dir.clone()
+            }
+            None => {
+                // Fallback to current directory if state not available
+                std::env::current_dir()
+                    .map_err(|e| format!("Failed to get current directory: {}", e))?
+            }
+        };
+        
+        base_dir.join(&path_buf)
     };
 
     // Try to canonicalize, but if the file doesn't exist, just return the absolute path

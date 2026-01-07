@@ -41,19 +41,15 @@ export const AIChatModal: React.FC<AIChatModalProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const initialPromptRef = useRef<string | null>(null);
 
-  // Sync with initialMessages prop and store/update initial prompt with full file contents
+  // Sync with initialMessages prop and store/update initial prompt with diff
   useEffect(() => {
-    // Always update the initial prompt ref with current file contents (for API context)
-    const fullPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
+    // Always update the initial prompt ref with diff (for API context)
+    const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
+    const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
 
-**Before (${leftFileName}):**
+**Diff:**
 \`\`\`
-${leftContent}
-\`\`\`
-
-**After (${rightFileName}):**
-\`\`\`
-${rightContent}
+${diffText}
 \`\`\`
 
 Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
@@ -79,7 +75,7 @@ Start here with a concise 2-3 sentence overview: What overall functionality chan
 - Notable implementation details or patterns
 
 Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
-    initialPromptRef.current = fullPrompt;
+    initialPromptRef.current = diffPrompt;
     
     // Sync messages from prop
     if (initialMessages.length > 0) {
@@ -144,7 +140,7 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
     const apiMessages: Array<{role: string, content: string}> = [];
     
     if (initialPrompt) {
-      // First message: system instruction + initial prompt with full file contents
+      // First message: system instruction + initial prompt with diff
       apiMessages.push({
         role: 'user',
         content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${initialPrompt}`,
@@ -163,158 +159,36 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
       });
     });
     
-    // Retry logic with fallback to diff format
-    let attempt = 0;
-    const maxAttempts = 3;
-    
-    const trySendMessage = async (messagesToSend: Array<{role: string, content: string}>) => {
-      try {
-        const response = await invoke<string>('send_lm_studio_message', { messages: messagesToSend });
-        setMessages(prevMsgs => {
-          // Check if we already have this assistant message to prevent duplicates
-          const lastMsg = prevMsgs[prevMsgs.length - 1];
-          if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === response) {
-            return prevMsgs;
-          }
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content: response || 'No response received',
-          };
-          return [...prevMsgs, assistantMessage];
-        });
-        return true; // Success
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const isContextError = errorMessage.includes('context length') || 
-                               errorMessage.includes('number of tokens') ||
-                               (errorMessage.includes('400') && errorMessage.includes('Bad Request'));
-        
-        if (isContextError && attempt < maxAttempts - 1) {
-          attempt++;
-          return false; // Retry needed
-        } else {
-          // Final attempt failed or non-context error
-          setMessages(prevMsgs => {
-            const errorContent = `Error: ${errorMessage}${attempt > 0 ? ` (tried ${attempt + 1} attempts with different formats)` : ''}`;
-            // Check if we already have this error message
-            const lastMsg = prevMsgs[prevMsgs.length - 1];
-            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === errorContent) {
-              return prevMsgs;
-            }
-            const errorMsg: Message = {
-              role: 'assistant',
-              content: errorContent,
-            };
-            return [...prevMsgs, errorMsg];
-          });
-          return true; // Done (with error)
+    // Send message to API
+    try {
+      const response = await invoke<string>('send_lm_studio_message', { messages: apiMessages });
+      setMessages(prevMsgs => {
+        // Check if we already have this assistant message to prevent duplicates
+        const lastMsg = prevMsgs[prevMsgs.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === response) {
+          return prevMsgs;
         }
-      }
-    };
-    
-    // Try with current messages
-    let success = await trySendMessage(apiMessages);
-    
-    // If failed due to context, retry with diff format
-    if (!success && attempt === 1) {
-      const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
-      const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
-
-**Diff:**
-\`\`\`
-${diffText}
-\`\`\`
-
-Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
-
-## Summary
-
-Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
-
-## Changes
-
-### Additions
-- New functionality, classes, functions, or features added
-
-### Deletions  
-- Functionality, classes, functions, or features removed
-
-### Modifications
-- Existing code that was changed or refactored
-
-## Details
-
-- Specific new classes, functions, or patterns introduced
-- Notable implementation details or patterns
-
-Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
-      
-      const retryApiMessages: Array<{role: string, content: string}> = [{
-        role: 'user',
-        content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${diffPrompt}`,
-      }];
-      
-      // Add subsequent conversation messages
-      messagesToInclude.forEach(msg => {
-        retryApiMessages.push({
-          role: msg.role,
-          content: msg.content,
-        });
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response || 'No response received',
+        };
+        return [...prevMsgs, assistantMessage];
       });
-      
-      success = await trySendMessage(retryApiMessages);
-    }
-    
-    // If still failed, try with condensed diff (only changed lines)
-    if (!success && attempt === 2) {
-      const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
-      const diffLines = diffText.split('\n').filter(line => line.startsWith('+') || line.startsWith('-'));
-      const condensedDiff = diffLines.join('\n');
-      const condensedPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
-
-**Diff (changed lines only):**
-\`\`\`
-${condensedDiff}
-\`\`\`
-
-Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
-
-## Summary
-
-Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
-
-## Changes
-
-### Additions
-- New functionality, classes, functions, or features added
-
-### Deletions  
-- Functionality, classes, functions, or features removed
-
-### Modifications
-- Existing code that was changed or refactored
-
-## Details
-
-- Specific new classes, functions, or patterns introduced
-- Notable implementation details or patterns
-
-Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
-      
-      const finalApiMessages: Array<{role: string, content: string}> = [{
-        role: 'user',
-        content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${condensedPrompt}`,
-      }];
-      
-      // Add subsequent conversation messages
-      messagesToInclude.forEach(msg => {
-        finalApiMessages.push({
-          role: msg.role,
-          content: msg.content,
-        });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setMessages(prevMsgs => {
+        const errorContent = `Error: ${errorMessage}`;
+        // Check if we already have this error message
+        const lastMsg = prevMsgs[prevMsgs.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content === errorContent) {
+          return prevMsgs;
+        }
+        const errorMsg: Message = {
+          role: 'assistant',
+          content: errorContent,
+        };
+        return [...prevMsgs, errorMsg];
       });
-      
-      await trySendMessage(finalApiMessages);
     }
     
     setIsLoading(false);

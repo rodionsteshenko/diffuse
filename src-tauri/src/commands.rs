@@ -81,13 +81,16 @@ pub fn watch_files(
         loop {
             match rx.recv_timeout(Duration::from_millis(100)) {
                 Ok(Ok(event)) => {
+                    #[cfg(debug_assertions)]
                     println!("File event received: {:?}", event);
                     // Debounce: only emit after a short delay
                     std::thread::sleep(Duration::from_millis(100));
 
                     // Check which file changed
                     for path in event.paths {
+                        #[cfg(debug_assertions)]
                         let path_str = path.to_string_lossy().to_string();
+                        #[cfg(debug_assertions)]
                         println!("Event path: {}, left: {}, right: {}", path_str, left_path, right_path);
 
                         // Try to canonicalize for comparison
@@ -103,9 +106,11 @@ pub fn watch_files(
                         let right_canonical_str = right_canonical.to_string_lossy().to_string();
 
                         if canonical_path_str == left_canonical_str {
+                            #[cfg(debug_assertions)]
                             println!("Emitting file-changed for LEFT: {}", left_canonical_str);
                             app.emit("file-changed", left_canonical_str.clone()).ok();
                         } else if canonical_path_str == right_canonical_str {
+                            #[cfg(debug_assertions)]
                             println!("Emitting file-changed for RIGHT: {}", right_canonical_str);
                             app.emit("file-changed", right_canonical_str.clone()).ok();
                         }
@@ -122,6 +127,7 @@ pub fn watch_files(
 
 #[tauri::command]
 pub async fn check_lm_studio_available() -> Result<bool, String> {
+    #[cfg(debug_assertions)]
     println!("🔍 Checking LM Studio availability at http://localhost:1234/v1/models");
     
     let client = reqwest::Client::new();
@@ -134,26 +140,37 @@ pub async fn check_lm_studio_available() -> Result<bool, String> {
     {
         Ok(response) => {
             let status = response.status();
+            #[cfg(debug_assertions)]
             println!("📡 LM Studio response status: {}", status);
             
             if status.is_success() {
                 match response.json::<Value>().await {
                     Ok(data) => {
+                        #[cfg(debug_assertions)]
                         println!("✅ LM Studio is available! Models: {:?}", data);
+                        #[cfg(not(debug_assertions))]
+                        let _ = data;
                         Ok(true)
                     }
                     Err(e) => {
+                        #[cfg(debug_assertions)]
                         println!("⚠️ LM Studio responded but JSON parse failed: {}", e);
+                        #[cfg(not(debug_assertions))]
+                        let _ = e;
                         Ok(false)
                     }
                 }
             } else {
+                #[cfg(debug_assertions)]
                 println!("❌ LM Studio returned status: {}", status);
                 Ok(false)
             }
         }
         Err(e) => {
+            #[cfg(debug_assertions)]
             println!("❌ LM Studio check failed: {}", e);
+            #[cfg(not(debug_assertions))]
+            let _ = e;
             Ok(false)
         }
     }
@@ -167,6 +184,7 @@ pub struct ChatMessage {
 
 #[tauri::command]
 pub async fn send_lm_studio_message(messages: Vec<ChatMessage>) -> Result<String, String> {
+    #[cfg(debug_assertions)]
     println!("💬 Sending message to LM Studio with {} messages", messages.len());
     
     let client = reqwest::Client::new();
@@ -184,23 +202,26 @@ pub async fn send_lm_studio_message(messages: Vec<ChatMessage>) -> Result<String
         "stream": false,
     });
     
+    #[cfg(debug_assertions)]
     println!("📤 Request body: {}", serde_json::to_string(&request_body).unwrap_or_default());
     
     match client
         .post("http://localhost:1234/v1/chat/completions")
         .header("Content-Type", "application/json")
-        .timeout(Duration::from_secs(60))
+        .timeout(Duration::from_secs(300))
         .json(&request_body)
         .send()
         .await
     {
         Ok(response) => {
             let status = response.status();
+            #[cfg(debug_assertions)]
             println!("📡 LM Studio chat response status: {}", status);
             
             if status.is_success() {
                 match response.json::<Value>().await {
                     Ok(data) => {
+                        #[cfg(debug_assertions)]
                         println!("✅ LM Studio response received");
                         // Extract the content from the response
                         if let Some(choices) = data.get("choices").and_then(|c| c.as_array()) {
@@ -215,17 +236,20 @@ pub async fn send_lm_studio_message(messages: Vec<ChatMessage>) -> Result<String
                         Err("No content in response".to_string())
                     }
                     Err(e) => {
+                        #[cfg(debug_assertions)]
                         println!("❌ LM Studio JSON parse error: {}", e);
                         Err(format!("Failed to parse response: {}", e))
                     }
                 }
             } else {
                 let error_text = response.text().await.unwrap_or_default();
+                #[cfg(debug_assertions)]
                 println!("❌ LM Studio returned error: {} - {}", status, error_text);
                 Err(format!("LM Studio API error: {} - {}", status, error_text))
             }
         }
         Err(e) => {
+            #[cfg(debug_assertions)]
             println!("❌ LM Studio request failed: {}", e);
             Err(format!("Failed to connect to LM Studio: {}", e))
         }

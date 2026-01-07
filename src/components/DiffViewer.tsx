@@ -127,14 +127,9 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   };
 
   useEffect(() => {
-    // Update diff changes when content changes
-    if (editorRef.current) {
-      const changes = editorRef.current.getLineChanges();
-      if (changes) {
-        // Trigger a re-render of diff decorations
-        editorRef.current.updateOptions({});
-      }
-    }
+    // The DiffEditor component automatically handles content updates
+    // Monaco will recompute diffs when the original/modified props change
+    // No additional action needed here - the parent component will call updateDiffChanges
   }, [leftContent, rightContent]);
 
   const headerBg = isDarkMode ? '#252526' : '#f3f3f3';

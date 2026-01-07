@@ -11,10 +11,10 @@ import { generateDiff } from './utils/diff';
 import './App.css';
 
 function App() {
-  const [leftFile, setLeftFile] = useState<FileInfo | null>(null);
-  const [rightFile, setRightFile] = useState<FileInfo | null>(null);
-  const [leftContent, setLeftContent] = useState('');
-  const [rightContent, setRightContent] = useState('');
+  const [beforeFile, setBeforeFile] = useState<FileInfo | null>(null);
+  const [afterFile, setAfterFile] = useState<FileInfo | null>(null);
+  const [beforeContent, setBeforeContent] = useState('');
+  const [afterContent, setAfterContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
@@ -44,17 +44,18 @@ function App() {
   });
 
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
-  const leftFileRef = useRef<FileInfo | null>(null);
-  const rightFileRef = useRef<FileInfo | null>(null);
+  const beforeFileRef = useRef<FileInfo | null>(null);
+  const afterFileRef = useRef<FileInfo | null>(null);
+  const lmStudioIntervalRef = useRef<number | null>(null);
 
   // Keep refs in sync with state
   useEffect(() => {
-    leftFileRef.current = leftFile;
-  }, [leftFile]);
+    beforeFileRef.current = beforeFile;
+  }, [beforeFile]);
 
   useEffect(() => {
-    rightFileRef.current = rightFile;
-  }, [rightFile]);
+    afterFileRef.current = afterFile;
+  }, [afterFile]);
 
   const {
     currentDiffIndex,
@@ -78,35 +79,31 @@ function App() {
   // Clear AI messages when files change - always regenerate analysis
   useEffect(() => {
     // Clear messages whenever file content changes
-    if (leftContent && rightContent) {
+    if (beforeContent && afterContent) {
       setAiMessages([]);
       setAiStatus('idle');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leftContent, rightContent, leftFile?.path, rightFile?.path]);
+  }, [beforeContent, afterContent, beforeFile?.path, afterFile?.path]);
 
   // Generate initial AI summary when files are loaded and AI is available
   useEffect(() => {
     const generateInitialSummary = async () => {
       // Only generate if we have files, AI is available, and we don't already have messages
-      if (!leftContent || !rightContent || !isAIAvailable || aiMessages.length > 0) {
+      if (!beforeContent || !afterContent || !isAIAvailable || aiMessages.length > 0) {
         return;
       }
 
-      const leftFileName = leftFile?.path || 'Left File';
-      const rightFileName = rightFile?.path || 'Right File';
+      const beforeFileName = beforeFile?.path || 'Before File';
+      const afterFileName = afterFile?.path || 'After File';
 
-      // Generate the full prompt with complete file contents
+      // Generate diff and create prompt
+      const diffText = generateDiff(beforeContent, afterContent, beforeFileName, afterFileName);
       const diffPrompt = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
 
-**Before (${leftFileName}):**
+**Diff:**
 \`\`\`
-${leftContent}
-\`\`\`
-
-**After (${rightFileName}):**
-\`\`\`
-${rightContent}
+${diffText}
 \`\`\`
 
 Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
@@ -137,126 +134,30 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
       const userMessage = { role: 'user' as const, content: diffPrompt };
       setAiMessages([userMessage]);
 
-      // Try with full files first, then fallback to diff if context is too large
-      let attempt = 0;
-      const maxAttempts = 3;
-      let lastError: Error | null = null;
+      try {
+        const apiMessages = [{
+          role: 'user',
+          content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${diffPrompt}`,
+        }];
 
-      while (attempt < maxAttempts) {
-        try {
-          let promptToSend = diffPrompt;
-          
-          if (attempt === 1) {
-            // Second attempt: Use diff format instead of full files
-            const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
-            promptToSend = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
-
-**Diff:**
-\`\`\`
-${diffText}
-\`\`\`
-
-Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
-
-## Summary
-
-Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
-
-## Changes
-
-### Additions
-- New functionality, classes, functions, or features added
-
-### Deletions  
-- Functionality, classes, functions, or features removed
-
-### Modifications
-- Existing code that was changed or refactored
-
-## Details
-
-- Specific new classes, functions, or patterns introduced
-- Notable implementation details or patterns
-
-Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
-          } else if (attempt === 2) {
-            // Third attempt: Use a more condensed diff (only show changed sections)
-            const diffText = generateDiff(leftContent, rightContent, leftFileName, rightFileName);
-            // Filter to only show lines with changes
-            const diffLines = diffText.split('\n').filter(line => line.startsWith('+') || line.startsWith('-'));
-            const condensedDiff = diffLines.join('\n');
-            promptToSend = `I'm analyzing a git diff showing changes to a file. Please provide a clear, concise summary.
-
-**Diff (changed lines only):**
-\`\`\`
-${condensedDiff}
-\`\`\`
-
-Analyze this diff and provide a summary. Start with a high-level overview of what functionality changed, was added, or removed. Then provide specific details.
-
-## Summary
-
-Start here with a concise 2-3 sentence overview: What overall functionality changed? What was added or removed at a high level? What's the purpose of these changes?
-
-## Changes
-
-### Additions
-- New functionality, classes, functions, or features added
-
-### Deletions  
-- Functionality, classes, functions, or features removed
-
-### Modifications
-- Existing code that was changed or refactored
-
-## Details
-
-- Specific new classes, functions, or patterns introduced
-- Notable implementation details or patterns
-
-Keep it concise and focused. Write naturally, not mechanically. Format using proper markdown syntax.`;
-          }
-
-          const apiMessages = [{
-            role: 'user',
-            content: `You are a helpful assistant that analyzes code diffs and explains changes clearly.\n\n${promptToSend}`,
-          }];
-
-          const response = await invoke<string>('send_lm_studio_message', { messages: apiMessages });
-          const assistantMessage = { role: 'assistant' as const, content: response || 'No response received' };
-          setAiMessages([userMessage, assistantMessage]);
-          setAiStatus('ready');
-          return; // Success, exit retry loop
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error));
-          const errorMessage = lastError.message || String(error);
-          
-          // Check if it's a context length error
-          const isContextError = errorMessage.includes('context length') || 
-                                 errorMessage.includes('number of tokens') ||
-                                 (errorMessage.includes('400') && errorMessage.includes('Bad Request'));
-          
-          if (isContextError && attempt < maxAttempts - 1) {
-            // Try again with diff format
-            attempt++;
-            continue;
-          } else {
-            // Final attempt failed or non-context error
-            const errorMsg = { 
-              role: 'assistant' as const, 
-              content: `Error: ${errorMessage}${attempt > 0 ? ` (tried ${attempt + 1} attempts with different formats)` : ''}` 
-            };
-            setAiMessages([userMessage, errorMsg]);
-            setAiStatus('ready');
-            return;
-          }
-        }
+        const response = await invoke<string>('send_lm_studio_message', { messages: apiMessages });
+        const assistantMessage = { role: 'assistant' as const, content: response || 'No response received' };
+        setAiMessages([userMessage, assistantMessage]);
+        setAiStatus('ready');
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMsg = { 
+          role: 'assistant' as const, 
+          content: `Error: ${errorMessage}` 
+        };
+        setAiMessages([userMessage, errorMsg]);
+        setAiStatus('ready');
       }
     };
 
     generateInitialSummary();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leftContent, rightContent, isAIAvailable, leftFile, rightFile]);
+  }, [beforeContent, afterContent, isAIAvailable, beforeFile, afterFile]);
 
   // Listen for system theme changes
   useEffect(() => {
@@ -278,6 +179,12 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
         const available = await invoke<boolean>('check_lm_studio_available');
         console.log('LM Studio available:', available);
         setIsAIAvailable(available);
+        
+        // If LM Studio becomes available, stop checking
+        if (available && lmStudioIntervalRef.current) {
+          clearInterval(lmStudioIntervalRef.current);
+          lmStudioIntervalRef.current = null;
+        }
       } catch (error) {
         console.error('LM Studio check error:', error);
         setIsAIAvailable(false);
@@ -286,9 +193,19 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
     
     // Check immediately
     checkLMStudio();
-    // Check every 5 seconds
-    const interval = setInterval(checkLMStudio, 5000);
-    return () => clearInterval(interval);
+    
+    // Only set up interval if LM Studio is not available
+    // We'll check periodically until it becomes available
+    lmStudioIntervalRef.current = setInterval(() => {
+      checkLMStudio();
+    }, 5000);
+    
+    return () => {
+      if (lmStudioIntervalRef.current) {
+        clearInterval(lmStudioIntervalRef.current);
+        lmStudioIntervalRef.current = null;
+      }
+    };
   }, []);
 
   // Load files on mount
@@ -296,33 +213,33 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
     const loadFiles = async () => {
       try {
         // Get CLI arguments
-        const [leftPath, rightPath] = await invoke<[string | null, string | null]>('get_cli_args');
+        const [beforePath, afterPath] = await invoke<[string | null, string | null]>('get_cli_args');
 
-        if (!leftPath || !rightPath) {
-          setError('Please provide two file paths as arguments.\nUsage: diffuse <left-file> <right-file>');
+        if (!beforePath || !afterPath) {
+          setError('Please provide two file paths as arguments.\nUsage: diffuse <before-file> <after-file>');
           setIsLoading(false);
           return;
         }
 
         // Resolve absolute paths (preserve original paths for display)
-        const leftAbsPath = await invoke<string>('get_absolute_path', { path: leftPath });
-        const rightAbsPath = await invoke<string>('get_absolute_path', { path: rightPath });
+        const beforeAbsPath = await invoke<string>('get_absolute_path', { path: beforePath });
+        const afterAbsPath = await invoke<string>('get_absolute_path', { path: afterPath });
 
         // Read file contents using absolute paths
-        const leftFileContent = await invoke<string>('read_file', { path: leftAbsPath });
-        const rightFileContent = await invoke<string>('read_file', { path: rightAbsPath });
+        const beforeFileContent = await invoke<string>('read_file', { path: beforeAbsPath });
+        const afterFileContent = await invoke<string>('read_file', { path: afterAbsPath });
 
         // Store both original path (for display) and absolute path (for operations)
-        setLeftFile({ path: leftPath, absolutePath: leftAbsPath, content: leftFileContent });
-        setRightFile({ path: rightPath, absolutePath: rightAbsPath, content: rightFileContent });
-        setLeftContent(leftFileContent);
-        setRightContent(rightFileContent);
+        setBeforeFile({ path: beforePath, absolutePath: beforeAbsPath, content: beforeFileContent });
+        setAfterFile({ path: afterPath, absolutePath: afterAbsPath, content: afterFileContent });
+        setBeforeContent(beforeFileContent);
+        setAfterContent(afterFileContent);
         setIsLoading(false);
 
         // Start watching files for changes (use absolute paths)
         await invoke('watch_files', {
-          leftPath: leftAbsPath,
-          rightPath: rightAbsPath
+          leftPath: beforeAbsPath,
+          rightPath: afterAbsPath
         });
       } catch (err) {
         setError(`Error loading files: ${err}`);
@@ -336,27 +253,27 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
     const unlisten = listen<string>('file-changed', async (event) => {
       const changedPath = event.payload;
       console.log('File changed event received:', changedPath);
-      console.log('Current leftFile:', leftFileRef.current);
-      console.log('Current rightFile:', rightFileRef.current);
+      console.log('Current beforeFile:', beforeFileRef.current);
+      console.log('Current afterFile:', afterFileRef.current);
 
       try {
         const newContent = await invoke<string>('read_file', { path: changedPath });
         console.log('Successfully read new content, length:', newContent.length);
 
-        const currentLeftFile = leftFileRef.current;
-        const currentRightFile = rightFileRef.current;
+        const currentBeforeFile = beforeFileRef.current;
+        const currentAfterFile = afterFileRef.current;
 
         // Compare with absolute paths for file watching
-        if (currentLeftFile && changedPath === currentLeftFile.absolutePath) {
-          console.log('Updating LEFT file');
-          setLeftFile({ ...currentLeftFile, content: newContent });
-          setLeftContent(newContent);
-        } else if (currentRightFile && changedPath === currentRightFile.absolutePath) {
-          console.log('Updating RIGHT file');
-          setRightFile({ ...currentRightFile, content: newContent });
-          setRightContent(newContent);
+        if (currentBeforeFile && changedPath === currentBeforeFile.absolutePath) {
+          console.log('Updating BEFORE file');
+          setBeforeFile({ ...currentBeforeFile, content: newContent });
+          setBeforeContent(newContent);
+        } else if (currentAfterFile && changedPath === currentAfterFile.absolutePath) {
+          console.log('Updating AFTER file');
+          setAfterFile({ ...currentAfterFile, content: newContent });
+          setAfterContent(newContent);
         } else {
-          console.log('Path does not match either file. Changed:', changedPath, 'Left:', currentLeftFile?.absolutePath, 'Right:', currentRightFile?.absolutePath);
+          console.log('Path does not match either file. Changed:', changedPath, 'Before:', currentBeforeFile?.absolutePath, 'After:', currentAfterFile?.absolutePath);
         }
       } catch (err) {
         console.error('Failed to reload file:', err);
@@ -378,14 +295,17 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
   // Update diff changes when content changes
   useEffect(() => {
     if (editorRef.current) {
-      // Small delay to ensure Monaco has processed the changes
-      setTimeout(() => {
+      // Longer delay to ensure Monaco has fully processed the changes and computed diffs
+      // Monaco needs time to parse the content and compute the diff
+      const timeoutId = setTimeout(() => {
         if (editorRef.current) {
           updateDiffChanges(editorRef.current);
         }
-      }, 100);
+      }, 300);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [leftContent, rightContent, updateDiffChanges]);
+  }, [beforeContent, afterContent, updateDiffChanges]);
 
   // Handle click on a diff line to navigate to that diff
   const handleDiffClick = useCallback((lineNumber: number) => {
@@ -494,12 +414,12 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
         aiStatus={aiStatus}
       />
       <DiffViewer
-        leftContent={leftContent}
-        rightContent={rightContent}
-        leftPath={leftFile?.path || ''}
-        rightPath={rightFile?.path || ''}
-        leftFileName={leftFile?.path || 'Left File'}
-        rightFileName={rightFile?.path || 'Right File'}
+        leftContent={beforeContent}
+        rightContent={afterContent}
+        leftPath={beforeFile?.path || ''}
+        rightPath={afterFile?.path || ''}
+        leftFileName={beforeFile?.path || 'Before File'}
+        rightFileName={afterFile?.path || 'After File'}
         fontSize={fontSize}
         fontFamily={fontFamily}
         onMount={handleEditorMount}
@@ -508,10 +428,10 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
       <AIChatModal
         isOpen={isAIChatOpen}
         onClose={() => setIsAIChatOpen(false)}
-        leftContent={leftContent}
-        rightContent={rightContent}
-        leftFileName={leftFile?.path || 'Left File'}
-        rightFileName={rightFile?.path || 'Right File'}
+        leftContent={beforeContent}
+        rightContent={afterContent}
+        leftFileName={beforeFile?.path || 'Before File'}
+        rightFileName={afterFile?.path || 'After File'}
         isDarkMode={isDarkMode}
         isAIAvailable={isAIAvailable}
         initialMessages={aiMessages}

@@ -10,20 +10,33 @@ export const useDiffNavigation = () => {
   const modifiedDecorationsRef = useRef<string[]>([]);
 
   const updateDiffChanges = useCallback((editor: editor.IStandaloneDiffEditor) => {
-    // Give Monaco time to compute diffs
-    setTimeout(() => {
+    // Give Monaco time to compute diffs - use a longer delay and retry if needed
+    const checkDiffs = (attempt = 0) => {
       const changes = editor.getLineChanges() || [];
-      console.log('Diff changes detected:', changes.length);
+      console.log('Diff changes detected:', changes.length, 'attempt:', attempt);
+      
+      // If no changes detected and we haven't tried enough times, retry
+      if (changes.length === 0 && attempt < 5) {
+        setTimeout(() => checkDiffs(attempt + 1), 100);
+        return;
+      }
+      
       setDiffChanges(changes);
       // Only adjust index if it's out of bounds, but keep it as close as possible
       // instead of jumping to 0
-      if (changes.length > 0 && currentDiffIndex >= changes.length) {
-        setCurrentDiffIndex(changes.length - 1);
-      } else if (changes.length === 0) {
-        setCurrentDiffIndex(0);
-      }
-    }, 100);
-  }, [currentDiffIndex]);
+      setCurrentDiffIndex(prevIndex => {
+        if (changes.length > 0 && prevIndex >= changes.length) {
+          return changes.length - 1;
+        } else if (changes.length === 0) {
+          return 0;
+        }
+        return prevIndex;
+      });
+    };
+    
+    // Start checking after initial delay
+    setTimeout(() => checkDiffs(0), 200);
+  }, []);
 
   const highlightCurrentDiff = useCallback(() => {
     if (!editorRef.current || diffChanges.length === 0) return;

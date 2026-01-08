@@ -8,6 +8,8 @@ export const useDiffNavigation = () => {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
   const originalDecorationsRef = useRef<string[]>([]);
   const modifiedDecorationsRef = useRef<string[]>([]);
+  const hasAutoJumpedRef = useRef(false);
+  const previousChangesLengthRef = useRef(0);
 
   const updateDiffChanges = useCallback((editor: editor.IStandaloneDiffEditor) => {
     // Give Monaco time to compute diffs - use a longer delay and retry if needed
@@ -21,17 +23,36 @@ export const useDiffNavigation = () => {
         return;
       }
       
+      const previousChangesLength = previousChangesLengthRef.current;
+      previousChangesLengthRef.current = changes.length;
       setDiffChanges(changes);
-      // Only adjust index if it's out of bounds, but keep it as close as possible
-      // instead of jumping to 0
-      setCurrentDiffIndex(prevIndex => {
-        if (changes.length > 0 && prevIndex >= changes.length) {
-          return changes.length - 1;
-        } else if (changes.length === 0) {
-          return 0;
-        }
-        return prevIndex;
-      });
+      
+      // Auto-jump to first diff if this is the first time we detect diffs
+      if (changes.length > 0 && previousChangesLength === 0 && !hasAutoJumpedRef.current) {
+        hasAutoJumpedRef.current = true;
+        setCurrentDiffIndex(0);
+        // Scroll to first diff after a short delay to ensure editor is ready
+        setTimeout(() => {
+          if (editorRef.current && changes.length > 0) {
+            const firstChange = changes[0];
+            const lineNumber = firstChange.modifiedStartLineNumber || firstChange.originalStartLineNumber;
+            if (lineNumber > 0) {
+              editorRef.current.revealLineInCenter(lineNumber);
+            }
+          }
+        }, 100);
+      } else {
+        // Only adjust index if it's out of bounds, but keep it as close as possible
+        // instead of jumping to 0
+        setCurrentDiffIndex(prevIndex => {
+          if (changes.length > 0 && prevIndex >= changes.length) {
+            return changes.length - 1;
+          } else if (changes.length === 0) {
+            return 0;
+          }
+          return prevIndex;
+        });
+      }
     };
     
     // Start checking after initial delay
@@ -129,8 +150,14 @@ export const useDiffNavigation = () => {
     const NAVIGATION_THROTTLE = 30; // ms between navigations when holding key (reduced for better responsiveness)
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Check for Alt/Option key (on Mac, Option key sets altKey to true)
-      if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      // Use Up/Down arrows to navigate (without Alt)
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        // Only handle if not typing in an input field
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
+        
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();

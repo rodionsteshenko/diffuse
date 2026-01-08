@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { editor } from 'monaco-editor';
 import { DiffViewer } from './components/DiffViewer';
 import { NavigationBar } from './components/NavigationBar';
@@ -345,21 +346,38 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
     setFontSize(prev => Math.max(prev - 2, 8));
   }, []);
 
-  // Keyboard shortcuts for zoom only (read-only mode)
+  // Keyboard shortcuts for zoom and window closing
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
         increaseFontSize();
       } else if ((e.metaKey || e.ctrlKey) && (e.key === '-' || e.key === '_')) {
         e.preventDefault();
         decreaseFontSize();
+      } else if (e.key === 'Escape') {
+        // Close AI chat modal if open, otherwise close window
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        if (isAIChatOpen) {
+          setIsAIChatOpen(false);
+        } else {
+          try {
+            const appWindow = getCurrentWindow();
+            await appWindow.close();
+          } catch (error) {
+            console.error('Error closing window:', error);
+          }
+        }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [increaseFontSize, decreaseFontSize]);
+    // Use capture phase to catch Escape before Monaco Editor or other components handle it
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [increaseFontSize, decreaseFontSize, isAIChatOpen]);
 
   const backgroundColor = isDarkMode ? '#1e1e1e' : '#ffffff';
   const textColor = isDarkMode ? '#cccccc' : '#333333';

@@ -84,12 +84,61 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   }, []);
 
   // Detect system theme
-  const [theme, setTheme] = useState<'vs-dark' | 'vs-light'>(() => {
+  const [theme, setTheme] = useState<'vs-dark-custom' | 'vs-light-custom'>(() => {
     if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'vs-dark' : 'vs-light';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'vs-dark-custom' : 'vs-light-custom';
     }
-    return 'vs-dark';
+    return 'vs-dark-custom';
   });
+
+  // Define custom themes with improved diff colors when Monaco loads
+  useEffect(() => {
+    const defineThemes = () => {
+      if ((window as any).monaco && (window as any).monaco.editor) {
+        // Dark theme with better diff colors - darker shades
+        (window as any).monaco.editor.defineTheme('vs-dark-custom', {
+          base: 'vs-dark',
+          inherit: true,
+          rules: [],
+          colors: {
+            'diffEditor.insertedTextBackground': '#1e5a1e', // Darker green for additions
+            'diffEditor.removedTextBackground': '#5a1e1e', // Darker red for deletions
+            'diffEditor.insertedTextBorder': '#2d7a2d',
+            'diffEditor.removedTextBorder': '#7a2d2d',
+          },
+        });
+        
+        // Light theme with better diff colors - lighter shades
+        (window as any).monaco.editor.defineTheme('vs-light-custom', {
+          base: 'vs',
+          inherit: true,
+          rules: [],
+          colors: {
+            'diffEditor.insertedTextBackground': '#d4edda', // Lighter green for additions
+            'diffEditor.removedTextBackground': '#f8d7da', // Lighter red for deletions
+            'diffEditor.insertedTextBorder': '#c3e6cb',
+            'diffEditor.removedTextBorder': '#f5c6cb',
+          },
+        });
+        return true;
+      }
+      return false;
+    };
+
+    // Try to define themes immediately
+    if (defineThemes()) {
+      return;
+    }
+
+    // If Monaco isn't loaded yet, wait for it
+    const checkInterval = setInterval(() => {
+      if (defineThemes()) {
+        clearInterval(checkInterval);
+      }
+    }, 100);
+
+    return () => clearInterval(checkInterval);
+  }, []);
 
   // Listen for system theme changes
   useEffect(() => {
@@ -97,7 +146,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = (e: MediaQueryListEvent) => {
-      setTheme(e.matches ? 'vs-dark' : 'vs-light');
+      setTheme(e.matches ? 'vs-dark-custom' : 'vs-light-custom');
     };
 
     mediaQuery.addEventListener('change', handleChange);
@@ -106,6 +155,35 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
   const handleEditorMount = (editor: editor.IStandaloneDiffEditor) => {
     editorRef.current = editor;
+
+    // Ensure themes are defined when editor mounts
+    if ((window as any).monaco && (window as any).monaco.editor) {
+      // Dark theme with better diff colors - darker shades
+      (window as any).monaco.editor.defineTheme('vs-dark-custom', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [],
+        colors: {
+          'diffEditor.insertedTextBackground': '#1e5a1e', // Darker green for additions
+          'diffEditor.removedTextBackground': '#5a1e1e', // Darker red for deletions
+          'diffEditor.insertedTextBorder': '#2d7a2d',
+          'diffEditor.removedTextBorder': '#7a2d2d',
+        },
+      });
+      
+      // Light theme with better diff colors - lighter shades
+      (window as any).monaco.editor.defineTheme('vs-light-custom', {
+        base: 'vs',
+        inherit: true,
+        rules: [],
+        colors: {
+          'diffEditor.insertedTextBackground': '#d4edda', // Lighter green for additions
+          'diffEditor.removedTextBackground': '#f8d7da', // Lighter red for deletions
+          'diffEditor.insertedTextBorder': '#c3e6cb',
+          'diffEditor.removedTextBorder': '#f5c6cb',
+        },
+      });
+    }
 
     // Listen for clicks to detect which diff was clicked (read-only mode)
     const modifiedEditor = editor.getModifiedEditor();

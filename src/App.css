@@ -136,6 +136,7 @@ button {
   border-right: 2px solid #ff6b00 !important;
   font-weight: 600 !important;
   box-shadow: inset 0 0 8px rgba(255, 107, 0, 0.3) !important;
+  padding-left: 24px !important; /* Horizontal offset so yellow doesn't sit on top of first character */
 }
 
 /* Dark theme variant */
@@ -144,6 +145,7 @@ button {
   border-left: 4px solid #ff8c00 !important;
   border-right: 2px solid #ff8c00 !important;
   box-shadow: inset 0 0 10px rgba(255, 140, 0, 0.4) !important;
+  padding-left: 24px !important; /* Horizontal offset so yellow doesn't sit on top of first character */
 }
 
 /* Light theme variant */
@@ -152,6 +154,7 @@ button {
   border-left: 4px solid #ff8800 !important;
   border-right: 2px solid #ff8800 !important;
   box-shadow: inset 0 0 8px rgba(255, 136, 0, 0.3) !important;
+  padding-left: 24px !important; /* Horizontal offset so yellow doesn't sit on top of first character */
 }
 
 .current-diff-glyph {

@@ -13,15 +13,20 @@ interface NavigationBarProps {
   onAIChatClick?: () => void;
   isAIAvailable?: boolean;
   aiStatus?: 'idle' | 'thinking' | 'ready';
+  leftFileSaved?: boolean;
+  rightFileSaved?: boolean;
 }
 
 const FONT_FAMILIES = [
   'Monaco',
   'Menlo',
+  'PT Mono',
+  'Courier',
   'Courier New',
 ];
 
-const FONT_SIZES = [10, 12, 14, 16, 18, 20, 22, 24];
+// Generate font sizes from 6 to 32 (inclusive)
+const FONT_SIZES = Array.from({ length: 27 }, (_, i) => i + 6);
 
 export const NavigationBar: React.FC<NavigationBarProps> = ({
   currentDiffIndex,
@@ -35,6 +40,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   onAIChatClick,
   isAIAvailable = false,
   aiStatus = 'idle',
+  leftFileSaved = true,
+  rightFileSaved = true,
 }) => {
   // Debug logging
   useEffect(() => {
@@ -64,6 +71,8 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
   const borderColor = isDarkMode ? '#333' : '#ddd';
   const textColor = isDarkMode ? '#cccccc' : '#333333';
   const labelColor = isDarkMode ? '#888' : '#666';
+  const savedColor = isDarkMode ? '#4caf50' : '#2e7d32';
+  const unsavedColor = isDarkMode ? '#ff9800' : '#f57c00';
 
   return (
     <div style={{
@@ -79,7 +88,35 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
       flexShrink: 0,
       margin: 0,
     }}>
-      {/* Left side: Navigation controls */}
+      {/* Left side: Save status and Navigation controls */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Save status indicator */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px',
+          fontSize: '11px',
+          padding: '2px 8px',
+          borderRadius: '3px',
+          backgroundColor: isDarkMode ? '#2d2d2d' : '#e8e8e8',
+        }}>
+          <span style={{ color: labelColor }}>Save status:</span>
+          <span style={{ 
+            color: leftFileSaved ? savedColor : unsavedColor,
+            fontWeight: '500',
+          }}>
+            Left: {leftFileSaved ? 'Saved' : 'Unsaved'}
+          </span>
+          <span style={{ color: labelColor }}>|</span>
+          <span style={{ 
+            color: rightFileSaved ? savedColor : unsavedColor,
+            fontWeight: '500',
+          }}>
+            Right: {rightFileSaved ? 'Saved' : 'Unsaved'}
+          </span>
+        </div>
+
+        {/* Navigation controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* Navigation controls */}
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -141,6 +178,7 @@ export const NavigationBar: React.FC<NavigationBarProps> = ({
             <option key={size} value={size}>{size}px</option>
           ))}
         </select>
+      </div>
       </div>
       </div>
 

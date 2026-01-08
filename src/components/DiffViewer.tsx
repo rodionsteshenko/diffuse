@@ -5,6 +5,8 @@ import type { editor } from 'monaco-editor';
 interface DiffViewerProps {
   leftContent: string;
   rightContent: string;
+  editedLeftContent?: string; // Edited content (for tracking changes, not updating props)
+  editedRightContent?: string; // Edited content (for tracking changes, not updating props)
   leftPath: string;
   rightPath: string;
   leftFileName?: string; // Display name for left file
@@ -13,6 +15,10 @@ interface DiffViewerProps {
   fontFamily: string;
   onMount?: (editor: editor.IStandaloneDiffEditor) => void;
   onDiffClick?: (lineNumber: number) => void;
+  onLeftContentChange?: (content: string) => void;
+  onRightContentChange?: (content: string) => void;
+  onNavigateNext?: () => void;
+  onNavigatePrevious?: () => void;
 }
 
 const getLanguageFromPath = (path: string): string => {
@@ -51,6 +57,8 @@ const getLanguageFromPath = (path: string): string => {
 export const DiffViewer: React.FC<DiffViewerProps> = ({
   leftContent,
   rightContent,
+  editedLeftContent,
+  editedRightContent,
   leftPath: _leftPath,
   rightPath,
   leftFileName,
@@ -59,8 +67,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   fontFamily,
   onMount,
   onDiffClick,
+  onLeftContentChange,
+  onRightContentChange,
+  onNavigateNext,
+  onNavigatePrevious,
 }) => {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null);
+  const lastExternalLeftContentRef = useRef<string>(leftContent);
+  const lastExternalRightContentRef = useRef<string>(rightContent);
   const language = getLanguageFromPath(rightPath);
 
   // Detect system theme for file headers
@@ -156,6 +170,14 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
   const handleEditorMount = (editor: editor.IStandaloneDiffEditor) => {
     editorRef.current = editor;
 
+    // Get both editors
+    const modifiedEditor = editor.getModifiedEditor();
+    const originalEditor = editor.getOriginalEditor();
+
+    // Override Alt+Up/Down to use for diff navigation instead of moving lines
+    // We'll handle this at the window level instead since Monaco commands might not override properly
+    // The window handler in useDiffNavigation will catch these events
+
     // Ensure themes are defined when editor mounts
     if ((window as any).monaco && (window as any).monaco.editor) {
       // Dark theme with better diff colors - darker shades
@@ -185,9 +207,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       });
     }
 
-    // Listen for clicks to detect which diff was clicked (read-only mode)
-    const modifiedEditor = editor.getModifiedEditor();
-    const originalEditor = editor.getOriginalEditor();
+    // Listen for clicks to detect which diff was clicked
+    // (editors already obtained above)
 
     modifiedEditor.onMouseDown((e) => {
       if (e.target.position) {
@@ -201,13 +222,52 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       }
     });
 
+    // Listen for content changes in both editors
+    originalEditor.onDidChangeModelContent(() => {
+      const content = originalEditor.getValue();
+      onLeftContentChange?.(content);
+    });
+
+    modifiedEditor.onDidChangeModelContent(() => {
+      const content = modifiedEditor.getValue();
+      onRightContentChange?.(content);
+    });
+
     onMount?.(editor);
   };
 
+  // Update editor content only when it comes from external sources (file loading/watching)
+  // Not when user edits (to prevent scroll position jumps)
   useEffect(() => {
-    // The DiffEditor component automatically handles content updates
-    // Monaco will recompute diffs when the original/modified props change
-    // No additional action needed here - the parent component will call updateDiffChanges
+    if (editorRef.current) {
+      const originalEditor = editorRef.current.getOriginalEditor();
+      const modifiedEditor = editorRef.current.getModifiedEditor();
+      
+      // Only update if the external content changed (not from user edits)
+      if (leftContent !== lastExternalLeftContentRef.current) {
+        lastExternalLeftContentRef.current = leftContent;
+        // Preserve cursor position and scroll when updating from external source
+        const position = originalEditor.getPosition();
+        const scrollTop = originalEditor.getScrollTop();
+        originalEditor.setValue(leftContent);
+        if (position) {
+          originalEditor.setPosition(position);
+          originalEditor.setScrollTop(scrollTop);
+        }
+      }
+      
+      if (rightContent !== lastExternalRightContentRef.current) {
+        lastExternalRightContentRef.current = rightContent;
+        // Preserve cursor position and scroll when updating from external source
+        const position = modifiedEditor.getPosition();
+        const scrollTop = modifiedEditor.getScrollTop();
+        modifiedEditor.setValue(rightContent);
+        if (position) {
+          modifiedEditor.setPosition(position);
+          modifiedEditor.setScrollTop(scrollTop);
+        }
+      }
+    }
   }, [leftContent, rightContent]);
 
   const headerBg = isDarkMode ? '#252526' : '#f3f3f3';
@@ -268,8 +328,8 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           theme={theme}
           options={{
             renderSideBySide: true,
-            readOnly: true,
-            originalEditable: false,
+            readOnly: false,
+            originalEditable: true,
             scrollBeyondLastLine: false,
             minimap: { enabled: true },
             fontSize,
@@ -278,7 +338,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             folding: true,
             wordWrap: 'off',
             automaticLayout: true,
-            renderMarginRevertIcon: false, // Disable revert icons - read-only mode
+            renderMarginRevertIcon: true, // Enable revert icons for editable mode
             scrollbar: {
               vertical: 'auto',
               horizontal: 'auto',

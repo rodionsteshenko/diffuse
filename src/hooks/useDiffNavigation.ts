@@ -150,14 +150,18 @@ export const useDiffNavigation = () => {
     const NAVIGATION_THROTTLE = 30; // ms between navigations when holding key (reduced for better responsiveness)
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Use Up/Down arrows to navigate (without Alt)
-      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !e.altKey && !e.ctrlKey && !e.metaKey) {
-        // Only handle if not typing in an input field
+      // Use Alt/Option+Up/Down arrows to navigate diffs
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.altKey && !e.ctrlKey && !e.metaKey) {
+        // Check if we're in an actual input/textarea (not Monaco editor)
         const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        // Only skip if it's a real input/textarea element
+        // Monaco editor uses contentEditable but we want to handle Alt+Up/Down there
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
           return;
         }
         
+        // Prevent default and stop propagation BEFORE Monaco processes it
+        // This must happen in capture phase to override Monaco's move line command
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
@@ -174,6 +178,8 @@ export const useDiffNavigation = () => {
         } else if (e.key === 'ArrowUp') {
           goToPreviousDiff();
         }
+        
+        return false; // Indicate we handled it
       }
     };
 

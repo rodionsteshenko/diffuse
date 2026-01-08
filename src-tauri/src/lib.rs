@@ -73,6 +73,7 @@ pub fn run() {
             commands::write_file,
             commands::get_absolute_path,
             commands::watch_files,
+            commands::close_app,
             commands::check_lm_studio_available,
             commands::send_lm_studio_message,
             get_cli_args,

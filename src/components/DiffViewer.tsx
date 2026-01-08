@@ -117,8 +117,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           colors: {
             'diffEditor.insertedTextBackground': '#1e5a1e', // Darker green for additions
             'diffEditor.removedTextBackground': '#5a1e1e', // Darker red for deletions
-            'diffEditor.insertedTextBorder': '#2d7a2d',
-            'diffEditor.removedTextBorder': '#7a2d2d',
+            'diffEditor.insertedTextBorder': '#1e5a1e', // Match background color to hide borders
+            'diffEditor.removedTextBorder': '#5a1e1e', // Match background color to hide borders
+            'editor.lineHighlightBorder': '#00000000', // Fully transparent
+            'editor.lineHighlightBackground': '#00000000', // Fully transparent
           },
         });
         
@@ -130,8 +132,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
           colors: {
             'diffEditor.insertedTextBackground': '#d4edda', // Lighter green for additions
             'diffEditor.removedTextBackground': '#f8d7da', // Lighter red for deletions
-            'diffEditor.insertedTextBorder': '#c3e6cb',
-            'diffEditor.removedTextBorder': '#f5c6cb',
+            'diffEditor.insertedTextBorder': '#d4edda', // Match background color to hide borders
+            'diffEditor.removedTextBorder': '#f8d7da', // Match background color to hide borders
+            'editor.lineHighlightBorder': '#00000000', // Fully transparent
+            'editor.lineHighlightBackground': '#00000000', // Fully transparent
           },
         });
         return true;
@@ -188,8 +192,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         colors: {
           'diffEditor.insertedTextBackground': '#1e5a1e', // Darker green for additions
           'diffEditor.removedTextBackground': '#5a1e1e', // Darker red for deletions
-          'diffEditor.insertedTextBorder': '#2d7a2d',
-          'diffEditor.removedTextBorder': '#7a2d2d',
+          'diffEditor.insertedTextBorder': '#1e5a1e', // Match background color to hide borders
+          'diffEditor.removedTextBorder': '#5a1e1e', // Match background color to hide borders
+          'editor.lineHighlightBorder': '#00000000', // Fully transparent
+          'editor.lineHighlightBackground': '#00000000', // Fully transparent
         },
       });
       
@@ -201,8 +207,10 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
         colors: {
           'diffEditor.insertedTextBackground': '#d4edda', // Lighter green for additions
           'diffEditor.removedTextBackground': '#f8d7da', // Lighter red for deletions
-          'diffEditor.insertedTextBorder': '#c3e6cb',
-          'diffEditor.removedTextBorder': '#f5c6cb',
+          'diffEditor.insertedTextBorder': '#d4edda', // Match background color to hide borders
+          'diffEditor.removedTextBorder': '#f8d7da', // Match background color to hide borders
+          'editor.lineHighlightBorder': '#00000000', // Fully transparent
+          'editor.lineHighlightBackground': '#00000000', // Fully transparent
         },
       });
     }
@@ -339,6 +347,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
             wordWrap: 'off',
             automaticLayout: true,
             renderMarginRevertIcon: true, // Enable revert icons for editable mode
+            renderLineHighlight: 'none', // Disable line highlighting to prevent borders
             scrollbar: {
               vertical: 'auto',
               horizontal: 'auto',

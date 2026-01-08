@@ -126,6 +126,15 @@ pub fn watch_files(
 }
 
 #[tauri::command]
+pub fn close_app(app: AppHandle) -> Result<(), String> {
+    #[cfg(debug_assertions)]
+    println!("🚪 Closing app window via Escape key");
+
+    app.exit(0);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn check_lm_studio_available() -> Result<bool, String> {
     #[cfg(debug_assertions)]
     println!("🔍 Checking LM Studio availability at http://localhost:1234/v1/models");

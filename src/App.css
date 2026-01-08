@@ -129,33 +129,172 @@ button {
   }
 }
 
-/* Current diff highlight - much more prominent */
+/* Current diff highlight - use border only to avoid color mixing with diff backgrounds */
 .current-diff-highlight {
-  background-color: rgba(255, 200, 0, 0.35) !important;
   border-left: 4px solid #ff6b00 !important;
   border-right: 2px solid #ff6b00 !important;
   font-weight: 600 !important;
-  box-shadow: inset 0 0 8px rgba(255, 107, 0, 0.3) !important;
-  padding-left: 24px !important; /* Horizontal offset so yellow doesn't sit on top of first character */
+  padding-left: 24px !important; /* Horizontal offset so border doesn't sit on top of first character */
 }
 
 /* Dark theme variant */
 .monaco-editor.vs-dark .current-diff-highlight {
-  background-color: rgba(255, 200, 0, 0.4) !important;
   border-left: 4px solid #ff8c00 !important;
   border-right: 2px solid #ff8c00 !important;
-  box-shadow: inset 0 0 10px rgba(255, 140, 0, 0.4) !important;
-  padding-left: 24px !important; /* Horizontal offset so yellow doesn't sit on top of first character */
+  padding-left: 24px !important; /* Horizontal offset so border doesn't sit on top of first character */
 }
 
 /* Light theme variant */
 .monaco-editor.vs .current-diff-highlight {
-  background-color: rgba(255, 220, 0, 0.4) !important;
   border-left: 4px solid #ff8800 !important;
   border-right: 2px solid #ff8800 !important;
-  box-shadow: inset 0 0 8px rgba(255, 136, 0, 0.3) !important;
-  padding-left: 24px !important; /* Horizontal offset so yellow doesn't sit on top of first character */
+  padding-left: 24px !important; /* Horizontal offset so border doesn't sit on top of first character */
 }
+
+/* Remove line separators and make diff blocks seamless */
+.monaco-diff-editor .view-line {
+  border-top: none !important;
+  border-bottom: none !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: normal !important;
+}
+
+/* Remove any visual separations between consecutive diff lines */
+.monaco-diff-editor .view-line + .view-line {
+  margin-top: 0 !important;
+  border-top: none !important;
+}
+
+/* Remove borders from diff line decorations */
+.monaco-diff-editor .view-line .line-delete,
+.monaco-diff-editor .view-line .line-insert {
+  border-top: none !important;
+  border-bottom: none !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Ensure diff backgrounds blend seamlessly - remove any spacing between lines */
+.monaco-diff-editor .monaco-editor-background {
+  border: none !important;
+}
+
+/* Target Monaco's specific diff line classes - ensure uniform backgrounds */
+.monaco-diff-editor .char-delete,
+.monaco-diff-editor .char-insert,
+.monaco-diff-editor .line-delete,
+.monaco-diff-editor .line-insert {
+  border-top: none !important;
+  border-bottom: none !important;
+  margin: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Remove any borders from the view lines container */
+.monaco-diff-editor .view-lines .view-line {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Ensure the actual background divs don't have borders or spacing */
+.monaco-diff-editor .view-line > div {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Remove borders from Monaco's margin and content areas */
+.monaco-diff-editor .margin,
+.monaco-diff-editor .monaco-editor-background,
+.monaco-diff-editor .current-line {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Force uniform backgrounds for diff lines - remove any visual separations */
+.monaco-diff-editor .view-line[class*="insert"],
+.monaco-diff-editor .view-line[class*="delete"] {
+  border-top: none !important;
+  border-bottom: none !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Ensure background colors are uniform across all lines in a diff block */
+.monaco-diff-editor .monaco-editor .view-line {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Remove any box-shadow or outline that might create visual separation */
+.monaco-diff-editor .view-line,
+.monaco-diff-editor .view-line > div {
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Target the actual background rendering divs to ensure seamless colors */
+.monaco-diff-editor .view-line .mtk1,
+.monaco-diff-editor .view-line .mtk2,
+.monaco-diff-editor .view-line .mtk3,
+.monaco-diff-editor .view-line .mtk4,
+.monaco-diff-editor .view-line .mtk5 {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Ensure the line content divs don't have borders */
+.monaco-diff-editor .view-line > div[class*="monaco"] {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Force seamless backgrounds - remove any gaps between diff lines */
+.monaco-diff-editor .view-lines {
+  border-collapse: collapse !important;
+}
+
+/* Ensure all child elements of view-line don't have borders */
+.monaco-diff-editor .view-line * {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Target Monaco's internal background rendering */
+.monaco-diff-editor .monaco-editor .view-line .line-delete,
+.monaco-diff-editor .monaco-editor .view-line .line-insert {
+  border-top: none !important;
+  border-bottom: none !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Force uniform backgrounds - override any variations in background colors */
+.monaco-diff-editor .view-line[data-line-number] {
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* Remove any background color variations between consecutive diff lines */
+.monaco-diff-editor .view-line[class*="insert"] + .view-line[class*="insert"],
+.monaco-diff-editor .view-line[class*="delete"] + .view-line[class*="delete"] {
+  border-top: none !important;
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Ensure the background rendering divs don't have any borders or spacing */
+.monaco-diff-editor .view-line > div[style*="background"] {
+  border-top: none !important;
+  border-bottom: none !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
 
 .current-diff-glyph {
   background-color: #ff6b00 !important;

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { editor } from 'monaco-editor';
 import { DiffViewer } from './components/DiffViewer';
 import { NavigationBar } from './components/NavigationBar';
@@ -194,20 +193,31 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
           clearInterval(lmStudioIntervalRef.current);
           lmStudioIntervalRef.current = null;
         }
+        
+        // If LM Studio is not available, stop checking after first failure
+        if (!available && lmStudioIntervalRef.current) {
+          clearInterval(lmStudioIntervalRef.current);
+          lmStudioIntervalRef.current = null;
+        }
       } catch (error) {
         console.error('LM Studio check error:', error);
         setIsAIAvailable(false);
+        // Stop checking on error
+        if (lmStudioIntervalRef.current) {
+          clearInterval(lmStudioIntervalRef.current);
+          lmStudioIntervalRef.current = null;
+        }
       }
     };
     
     // Check immediately
     checkLMStudio();
     
-    // Only set up interval if LM Studio is not available
-    // We'll check periodically until it becomes available
+    // Set up interval to check every 30 seconds
+    // Will stop automatically if LM Studio becomes available or fails
     lmStudioIntervalRef.current = setInterval(() => {
       checkLMStudio();
-    }, 5000);
+    }, 30000); // 30 seconds
     
     return () => {
       if (lmStudioIntervalRef.current) {
@@ -440,15 +450,14 @@ Keep it concise and focused. Write naturally, not mechanically. Format using pro
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        
+
         if (isAIChatOpen) {
           setIsAIChatOpen(false);
         } else {
           try {
-            const appWindow = getCurrentWindow();
-            await appWindow.close();
+            await invoke('close_app');
           } catch (error) {
-            console.error('Error closing window:', error);
+            console.error('Error closing app:', error);
           }
         }
         return;

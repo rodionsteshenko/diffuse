@@ -80,3 +80,69 @@ export function generateDiff(before: string, after: string, beforeFileName: stri
   return diff.join('\n');
 }
 
+export interface DiffChangeEntry {
+  type: 'addition' | 'deletion' | 'modification';
+  beforeLines: string[];
+  afterLines: string[];
+}
+
+export interface ParsedDiff {
+  beforeFile: string;
+  afterFile: string;
+  changes: DiffChangeEntry[];
+}
+
+/**
+ * Parse a unified diff string (as produced by generateDiff) into structured changes.
+ */
+export function parseDiff(diffText: string): ParsedDiff {
+  const lines = diffText.split('\n');
+  const beforeFile = lines[0]?.replace(/^--- /, '') || '';
+  const afterFile = lines[1]?.replace(/^\+\+\+ /, '') || '';
+  
+  const changes: DiffChangeEntry[] = [];
+  let pendingDeletions: string[] = [];
+  let pendingAdditions: string[] = [];
+
+  const flushPending = () => {
+    if (pendingDeletions.length > 0 && pendingAdditions.length > 0) {
+      changes.push({
+        type: 'modification',
+        beforeLines: pendingDeletions,
+        afterLines: pendingAdditions,
+      });
+    } else if (pendingDeletions.length > 0) {
+      changes.push({
+        type: 'deletion',
+        beforeLines: pendingDeletions,
+        afterLines: [],
+      });
+    } else if (pendingAdditions.length > 0) {
+      changes.push({
+        type: 'addition',
+        beforeLines: [],
+        afterLines: pendingAdditions,
+      });
+    }
+    pendingDeletions = [];
+    pendingAdditions = [];
+  };
+
+  for (let i = 2; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.startsWith('-')) {
+      pendingDeletions.push(line.slice(1));
+    } else if (line.startsWith('+')) {
+      pendingAdditions.push(line.slice(1));
+    } else {
+      // Context line — flush any pending changes
+      flushPending();
+    }
+  }
+  
+  // Flush remaining
+  flushPending();
+
+  return { beforeFile, afterFile, changes };
+}
+
